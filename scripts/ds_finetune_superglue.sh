@@ -36,11 +36,11 @@ run_cmd="${DISTRIBUTED_ARGS} finetune_glm.py \
        $TRAIN_ARGS \
        $COMMON_ARGS \
        --pattern-id 0 \
-       --fp16 \
        --model-parallel-size ${MP_SIZE} \
        --epochs ${XXLARGE_EPOCH} \
        --overwrite \
        2>&1 | tee logs/log-${EXPERIMENT_NAME}.txt"
+       # --fp16 \
 
 echo ${run_cmd}
 eval ${run_cmd}

@@ -101,8 +101,8 @@ def broadcast_data(keys, data, datatype):
                                    dtype=datatype)
 
     # Boradcast
-    flow.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),
-                                group=get_model_parallel_group())
+    # flow.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),
+    #                             group=get_model_parallel_group())
 
     # Unpack
     output = {}

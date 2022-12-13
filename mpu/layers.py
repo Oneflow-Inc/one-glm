@@ -102,7 +102,9 @@ class VocabParallelEmbedding(flow.nn.Module):
         # Allocate weights.
         self.weight = Parameter(flow.Tensor(self.num_embeddings_per_partition,
                                              self.embedding_dim))
-        self.weight.model_parallel = True
+        
+        # self.weight.model_parallel = True
+
         # And initialize.
         _initialize_affine_weight(
             self.weight, self.num_embeddings, self.embedding_dim,
@@ -214,10 +216,11 @@ class ColumnParallelLinear(flow.nn.Module):
         # we allocate the transpose.
         self.weight = Parameter(flow.Tensor(self.output_size_per_partition,
                                              self.input_size))
-        self.weight.model_parallel = True
+        # self.weight.model_parallel = True
+        # True
         if bias:
             self.bias = Parameter(flow.Tensor(self.output_size_per_partition))
-            self.bias.model_parallel = True
+            # self.bias.model_parallel = True
             # Always initialize bias to zero.
             with flow.no_grad():
                 self.bias.zero_()
@@ -288,7 +291,8 @@ class RowParallelLinear(flow.nn.Module):
         # we allocate the transpose.
         self.weight = Parameter(flow.Tensor(self.output_size,
                                              self.input_size_per_partition))
-        self.weight.model_parallel = True
+        # self.weight.model_parallel = True
+        # True
         if bias:
             self.bias = Parameter(flow.Tensor(self.output_size))
             # Always initialize bias to zero.

@@ -23,7 +23,9 @@
 import contextlib
 import oneflow.distributed as dist
 import oneflow  as flow
+import os
 from oneflow import _C
+
 # from oneflow.cuda import _lazy_call, device as device_ctx_manager
 #from oneflow.utils.checkpoint import detach_variable
 
@@ -158,12 +160,12 @@ class CudaRNGStatesTracker:
         if name in self.states_:
             raise Exception('cuda rng state {} already exists'.format(name))
         # Get the current rng state.
-        orig_rng_state = flow.cuda.get_rng_state()
+        # orig_rng_state = flow.cuda.get_rng_state()
         # Set the new state and store it.
         flow.cuda.manual_seed(seed)
-        self.states_[name] = flow.cuda.get_rng_state()
+        # self.states_[name] = flow.cuda.get_rng_state()
         # Reset rng state to what it was.
-        _set_cuda_rng_state(orig_rng_state)
+        # _set_cuda_rng_state(orig_rng_state)
 
     @contextlib.contextmanager
     def fork(self, name=_MODEL_PARALLEL_RNG_TRACKER_NAME):
@@ -218,11 +220,11 @@ def model_parallel_cuda_manual_seed(seed):
     # Data parallel gets the original sedd.
     data_parallel_seed = seed
 
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('> initializing model parallel cuda seeds on global rank {}, '
               'model parallel rank {}, and data parallel rank {} with '
               'model parallel seed: {} and data parallel seed: {}'.format(
-                  flow.distributed.get_rank(), get_model_parallel_rank(),
+                  int(os.getenv("RANK", -1)), get_model_parallel_rank(),
                   get_data_parallel_rank(), model_parallel_seed,
                   data_parallel_seed), flush=True)
     _CUDA_RNG_STATE_TRACKER.reset()

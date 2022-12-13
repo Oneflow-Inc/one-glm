@@ -101,7 +101,7 @@ class DataConfig:
         self.defaults = defaults
 
     def apply(self, args, tokenizer):
-        if flow.distributed.get_rank() == 0:
+        if int(os.getenv("RANK", -1)) == 0:
             print('configuring data')
         self.apply_defaults(args)
         return make_loaders(args, tokenizer)
@@ -142,9 +142,11 @@ def prepare_tokenizer(args):
     else:
         token_counts = flow.cuda.LongTensor([0, 0])
     # Broadcast num tokens.
-    flow.distributed.broadcast(token_counts,
-                                mpu.get_model_parallel_src_rank(),
-                                group=mpu.get_model_parallel_group())
+    # true
+    # flow.distributed.broadcast(token_counts,
+    #                             mpu.get_model_parallel_src_rank(),
+    #                             group=mpu.get_model_parallel_group())
+    
     num_tokens = token_counts[0].item()
     eod_token = token_counts[1].item()
     args.vocab_size, args.eod_token = num_tokens, eod_token
@@ -250,7 +252,8 @@ def make_loaders(args, tokenizer):
 
     if args.use_tfrecords:
         return make_tfrecord_loaders(args)
-    world_size = flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
+    # flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
+    world_size = int(os.getenv("WORLD_SIZE", 1)) 
     if args.loader_scatter is not None:
         assert world_size % args.loader_scatter == 0
     batch_size = args.batch_size * world_size

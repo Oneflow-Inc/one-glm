@@ -15,7 +15,7 @@ gpt_options=" \
        --num-attention-heads 16 \
        --seq-length 512 \
        --max-position-embeddings 512 \
-       --save /root/data/checkpoints \
+       --save /home/fengwen/datasets/temp \
        --train-iters 200000 \
        --resume-dataloader \
        --train-data bert-large \

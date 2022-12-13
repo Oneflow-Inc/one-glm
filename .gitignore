@@ -136,5 +136,3 @@ runs/*
 settings.json
 .vscode/
 datasets
-chinese_sentencepiece
-.pytorch_pretrained_bert

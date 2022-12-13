@@ -329,7 +329,7 @@ class ParallelSelfAttention(flow.nn.Module):
         return output
 
 
-@flow.jit.script
+# @flow.jit.script
 def gelu_impl(x):
     """OpenAI's gelu implementation."""
     return 0.5 * x * (1.0 + flow.tanh(0.7978845608028654 * x *

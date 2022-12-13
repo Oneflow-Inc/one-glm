@@ -275,9 +275,9 @@ def report_iteration_metrics(summary_writer, optimizer, lr, loss, elapsed_time, 
     log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(elapsed_time)
     log_string += ' learning rate {:.3E} |'.format(lr)
     log_string += ' lm loss {:.6E} |'.format(loss)
-    if args.fp16:
-        log_string += ' loss scale {:.1f} |'.format(
-            optimizer.cur_scale if args.deepspeed else optimizer.loss_scale)
+    # if args.fp16:
+    #     log_string += ' loss scale {:.1f} |'.format(
+    #         optimizer.cur_scale if args.deepspeed else optimizer.loss_scale)
     print_rank_0(log_string)
     if summary_writer is not None:
         summary_writer.add_scalar(f'Train/lr', lr, step)
@@ -356,7 +356,7 @@ def train(model, optimizer, lr_scheduler,
                 report_memory('after {} iterations'.format(args.iteration))
                 report_memory_flag = False
             # for i in range(flow.distributed.get_world_size()):
-            #     if i == flow.distributed.get_rank():
+            #     if i == int(os.getenv("RANK", -1)):
             #         print(get_hostname())
             #         timers.log(['forward', 'backward', 'optimizer',
             #                     'batch generator', 'data loader'],
@@ -486,10 +486,10 @@ def initialize_distributed(args):
     args.master_ip = os.getenv('MASTER_ADDR', 'localhost')
     args.master_port = os.getenv('MASTER_PORT', '6000')
     init_method += args.master_ip + ':' + args.master_port
-    flow.distributed.init_process_group(
-        backend=args.distributed_backend,
-        world_size=args.world_size, rank=args.rank,
-        init_method=init_method)
+    # flow.distributed.init_process_group(
+    #     backend=args.distributed_backend,
+    #     world_size=args.world_size, rank=args.rank,
+    #     init_method=init_method)
 
     # Set the model-parallel / data-parallel communicators.
     mpu.initialize_model_parallel(args.model_parallel_size)
@@ -530,10 +530,11 @@ def get_train_val_test_data(args, tokenizer):
     else:
         data_counts = flow.cuda.LongTensor([0, 0, 0])
 
-    # Broadcast num tokens.
-    flow.distributed.broadcast(data_counts,
-                                mpu.get_model_parallel_src_rank(),
-                                group=mpu.get_model_parallel_group())
+    # # Broadcast num tokens.
+    # flow.distributed.broadcast(data_counts,
+    #                             mpu.get_model_parallel_src_rank(),
+    #                             group=mpu.get_model_parallel_group())
+    
     args.do_train = data_counts[0].item()
     args.do_valid = data_counts[1].item()
     args.do_test = data_counts[2].item()
@@ -585,12 +586,12 @@ def main():
                 optimizer._model_params_to_master_params()
     else:
         args.iteration = 0
-    flow.distributed.barrier()
+    # flow.distributed.barrier()
     if args.switch_linear:
         lr_scheduler.switch_linear(args)
 
     summary_writer = None
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('Pretrain GPT2 model')
         args.log_dir = None
         if args.train_iters > 0:
@@ -652,16 +653,16 @@ def main():
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, lr_scheduler, args)
 
-    if test_data is not None:
-        test_data_iterator = iter(test_data)
-    else:
-        test_data_iterator = None
+    # if test_data is not None:
+    #     test_data_iterator = iter(test_data)
+    # else:
+    #     test_data_iterator = None
 
-    if args.do_test:
-        # Run on test data.
-        prefix = 'the end of training for test data'
-        evaluate_and_print_results(prefix, (test_data_iterator, None),
-                                   model, args, timers, verbose=True, forward_step_func=forward_step)
+    # if args.do_test:
+    #     # Run on test data.
+    #     prefix = 'the end of training for test data'
+    #     evaluate_and_print_results(prefix, (test_data_iterator, None),
+    #                                model, args, timers, verbose=True, forward_step_func=forward_step)
 
 
 if __name__ == "__main__":
