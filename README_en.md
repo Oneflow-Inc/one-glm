@@ -1,21 +1,23 @@
-# one-glm
-同步最新的glm版本 ，github链接: https://github.com/THUDM/GLM
+# GLM
 
-## GLM 
-GLM是一种通用语言模型，使用自回归填空目标进行预训练，使用在各种自然语言理解和生成任务上。
+GLM is a General Language Model pretrained with an autoregressive blank-filling objective and can be finetuned on
+various natural language understanding and generation tasks.
 
-请参考我们的论文了解GLM的详细描述：
+Please refer to our paper for a detailed description of GLM:
+
 [GLM: General Language Model Pretraining with Autoregressive Blank Infilling](https://arxiv.org/abs/2103.10360) (ACL
 2022)
 
-Zhengxiao Du*，Yujie Qian*，Xiao Liu，Ming Ding，Jiezhong Qiu，Zhilin Yang，Jie Tang（*: 相等贡献）
+Zhengxiao Du*, Yujie Qian*, Xiao Liu, Ming Ding, Jiezhong Qiu, Zhilin Yang, Jie Tang (*: equal contribution)
 
-我们发布了[GLM-130B](https://github.com/THUDM/GLM-130B) ，这是一个基于GLM框架的双语（英文和中文）预训练语言模型，具有130亿个参数。
+**We release [GLM-130B](https://github.com/THUDM/GLM-130B), an open bilingual (English & Chinese) pre-trained language
+model wit 130 billion parameters based on the GLM framework.**
 
 ## Pretrained Models
-> 预训练模型
 
-您可以从[OneDrive](https://mailstsinghuaeducn-my.sharepoint.com/:f:/g/personal/duzx16_mails_tsinghua_edu_cn/Eg8MZe62MlVFs_mK2tHaH-sBC-UC01jpGPZop08pID7sOw?e=MsevNR) 或 [清华云](https://cloud.tsinghua.edu.cn/d/13f5b03da9594e5490c4)下载论文中使用的预训练模型。
+You can download the pretrained models used in the paper
+from [OneDrive](https://mailstsinghuaeducn-my.sharepoint.com/:f:/g/personal/duzx16_mails_tsinghua_edu_cn/Eg8MZe62MlVFs_mK2tHaH-sBC-UC01jpGPZop08pID7sOw?e=MsevNR)
+or [Tsinghua-Cloud](https://cloud.tsinghua.edu.cn/d/13f5b03da9594e5490c4).
 
 | Name              | Params | Language | Corpus                                                                              | Objective      | File                                                               | Config                            |
 |-------------------|--------|----------|-------------------------------------------------------------------------------------|----------------|--------------------------------------------------------------------|-----------------------------------|
@@ -30,15 +32,13 @@ Zhengxiao Du*，Yujie Qian*，Xiao Liu，Ming Ding，Jiezhong Qiu，Zhilin Yang�
 | GLM-10B           | 10B    | English  | [Pile](https://arxiv.org/abs/2101.00027)                                            | Token+Sent+Doc | [Download](https://lfs.aminer.cn/misc/cogview/glm-10b-1024.zip)    | model_blocklm_10B.sh              |
 | GLM-10B-Chinese   | 10B    | Chinese  | [WuDaoCorpora](https://www.sciencedirect.com/science/article/pii/S2666651021000152) | Token+Sent+Doc | [Download](https://lfs.aminer.cn/misc/cogview/glm-10b-chinese.zip) | model_blocklm_10B_chinese.sh      |
 
-
-将下载的文件解压缩到本地文件夹中，并将相应脚本中的 `CHECKPOINT_PATH` 设置为文件夹路径。
+Unzip the downloaded file into a local folder and set `CHECKPOINT_PATH` in the corresponding scripts to the folder path.
 
 ## Results
-> 结果
 
 ### [SuperGLUE](https://super.gluebenchmark.com)
 
-开发集，单模型，单任务微调(dev set, single model, single-task finetuning)
+dev set, single model, single-task finetuning
 
 | Model                                                                                        | COPA | WSC  | RTE  | WiC  | CB        | MultiRC   | BoolQ | ReCoRD    |
 |----------------------------------------------------------------------------------------------|------|------|------|------|-----------|-----------|-------|-----------|
@@ -46,9 +46,6 @@ Zhengxiao Du*，Yujie Qian*，Xiao Liu，Ming Ding，Jiezhong Qiu，Zhilin Yang�
 | [DeBERTa-XXLarge-v2](https://github.com/microsoft/DeBERTa/tree/master/experiments/superglue) | 97.0 | -    | 93.5 | -    | -         | 87.8/63.6 | 88.3  | 94.1/93.7 |
 
 ### Seq2Seq
-
-> Seq2Seq模型是输出的长度不确定时采用的模型，这种情况一般是在机器翻译的任务中出现，将一句中文翻译成英文，那么这句英文的长度有可能会比中文短，也有可能会比中文长，所以输出的长度就不确定了。来源： https://zhuanlan.zhihu.com/p/194308943
-
 
 [CNN/Daily Mail](https://github.com/abisee/cnn-dailymail) (test set, no additional data used)
 
@@ -79,8 +76,13 @@ test set, zero-shot
 | Megatron-LM (8.3B) | 66.51              | 10.81                    |
 | Turing-NLG         | 67.98              | 10.21                    |
 
-
 ## Get Started
+
+### Hugging Face Hub
+
+You can access GLM models via HuggingFace Hub. Please
+install `transformers>=4.23.1` and find all the available models [here](https://huggingface.co/models?filter=glm).
+
 #### Generation
 ```python
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
@@ -123,55 +125,65 @@ outputs = model(**inputs)
 logits = outputs.logits
 ```
 
+### Docker Image
+
+We prepare two docker images based on CUDA 10.2 and CUDA 11.2. You can pull the pre-built images from Docker Hub and run
+with docker v19.03+
+
+  ```shell
+  docker run --gpus all --rm -it --ipc=host zxdu20/glm-cuda102
+  ```
+
+or replace `glm-cuda102` with `glm-cuda112`.
+
+You can also modify the image according to your requirements in [docker/cuda102.dockerfile](docker/cuda102.dockerfile)
+and build the image yourself
+
+  ```shell
+    docker build -f cuda102.dockerfile . -t glm-cuda102
+  ```
+
 ### Manual Installation
-> 手动安装
 
-请先安装PyTorch（我们使用的是1.7.0版本）和 [apex](https://github.com/NVIDIA/apex)，然后通过 `pip install -r requirements.txt`安装其他依赖项。
-
+Please first install PyTorch (we use 1.7.0) and [apex](https://github.com/NVIDIA/apex), and then install other
+dependencies by `pip install -r requirements.txt`
 
 ### Clone this repo
->  克隆这个仓库
 
-```shell
-git clone https://github.com/THUDM/GLM
-cd GLM
-```
-
+  ```shell
+  git clone https://github.com/THUDM/GLM
+  cd GLM
+  ```
 
 ### Model Parallelism
 
-> 模型并行
-
-如果您遇到CUDA out of memory错误，这意味着您的GPU内存有限，您可以尝试模型并行来将参数分给多个GPU。
-
-以双向模型并行为例。首先运行 `change_mp.py` 来分割 checkpoint：
+If your encounter the `CUDA out of memory` error, which means you GPU memory is limited, you can try the model
+parallelism to divide the parameters into multiple GPUs. Take the two-way model parallelism as an example. First
+run `change_mp.py` to divide the checkpoint:
 
 ```shell
 python change_mp.py path_to_the_checkpoint 2
 ```
-然后在模型配置文件中更新 `checkpoint` 路径（例如 [config_tasks/model_blocklm_10B.sh](config_tasks/model_blocklm_10B.sh))，
-并在脚本中将 `MP_SIZE` 更改为2（例如[scripts/ds_finetune_superglue.sh](scripts/ds_finetune_superglue.sh))。
 
-
+Then update the checkpoint path in the model config file (such
+as [config_tasks/model_blocklm_10B.sh](config_tasks/model_blocklm_10B.sh)) and change `MP_SIZE` in the script (such
+as [scripts/ds_finetune_superglue.sh](scripts/ds_finetune_superglue.sh)) to `2`.
 
 ## Usage
-> 使用指南
 
-我们提供了一些用于对GLM进行微调的脚本，以便在一些下游任务上使用。
+We provide scripts for finetuning GLM on some downstream tasks.
 
 ### Left-to-Right Generation / Blank Filling (Interactive)
-> 从左到右生成/填空（交互式）
 
-将 `CHECKPOINT_PATH` 更改为您的本地路径。运行以下脚本
+* Change `CHECKPOINT_PATH` to your local path. Run the following script
 
 ```
 bash scripts/generate_block.sh \
      config_tasks/model_blocklm_10B_chinese.sh
 ```
 
-有些模型（GLM-2B，GLM-10B和GLM-10B-Chinese）使用了三种不同的掩码标记：“[MASK]”用于短的填空，“[sMASK]”用于句子填空，“[gMASK]”用于从左到右的生成。
-
-
+Some models (GLM-2B, GLM-10B, and GLM-10B-Chinese) use three different mask tokens: `[MASK]` for short blank
+filling, `[sMASK]` for sentence filling, and `[gMASK]` for left-to-right generation.
 
 <details>
 <summary><b>Examples</b></summary>
@@ -230,10 +242,7 @@ GLM:
 青岛,青岛的冬天是青岛最舒服的时候,青岛有很多海滨浴场,冬天去海边泡一泡温泉,然后晒晒太阳是一件十分惬意的事情。青岛也有沙滩,冬天在沙滩上晒晒太阳,看看海,再玩玩沙滩游戏,感觉十分快乐的事。
 </details>
 
-
-
-您也可以在单个示例中添加多个 `[MASK]` 和 `[sMASK]`。 模型将从左到右依次填充空白。 每个空白的答案总是以一个特殊字符串开头。
-
+You can also add multiple `[MASK]` and `[sMASK]` in a single example. The model will fill the blanks one by one from left to right. The answer to each blank always begins with a special `<|startofpiece|>`.
 
 <details>
 <summary><b>Examples</b></summary>
@@ -253,12 +262,16 @@ GLM:
 
 </details>
 
+
 ### SuperGLUE
-> SuperGLUE是一个用于自然语言理解的评估基准测试，它测试语言模型的能力。 SuperGLUE包括了许多自然语言理解任务，如文本推断、语义相似性、知识图谱和翻译。它是由OpenAI等研究人员开发的。
 
-- Translation: 下载 [SuperGlue](https://super.gluebenchmark.com/tasks) 数据并检查实验配置在 [scripts/ds_finetune_superglue.sh](scripts/ds_finetune_superglue.sh) 。请注意，需要将 `DATA_ROOT` 、`CHECKPOINT_PATH`、`SAVE_PATH`更改为本地路径。您也可以根据可用的硬件修改 `batch-size` 和 `nproc_per_node`。
+- Download the [SuperGlue](https://super.gluebenchmark.com/tasks) data and check the experiment setup in
+  [scripts/ds_finetune_superglue.sh](scripts/ds_finetune_superglue.sh). Note
+  that `DATA_ROOT, CHECKPOINT_PATH, SAVE_PATH`
+  need to be changed to your local path. You may also change the `batch-size` and `nproc_per_node` according to your
+  available hardware.
 
-- 运行以下脚本（以 COPA 数据集为例）。
+- Run the following script (use the COPA dataset as an example)
 
 ```
 bash scripts/ds_finetune_superglue.sh \
@@ -266,7 +279,10 @@ bash scripts/ds_finetune_superglue.sh \
      config_tasks/task_copa.sh
 ```
 
-- 我们在代码中也实现了 [P-Tuning](https://arxiv.org/abs/2103.10385)   。运行以下脚本来集成 p-tuning：
+
+
+- We also implement [P-Tuning](https://arxiv.org/abs/2103.10385) in our code. Run the following script to integrate
+  p-tuning:
 
 ```shell
 bash scripts/ds_finetune_superglue_prompt.sh \
@@ -274,37 +290,42 @@ bash scripts/ds_finetune_superglue_prompt.sh \
      config_tasks/task_copa.sh
 ```
 
-- 要将 GLM 应用于具有填空微调的新 NLU 数据集，请在 [tasks/superglue/dataset.py](tasks/superglue/dataset.py)  中实现一个 `DataProcessor` ，用于数据加载，并在   [tasks/superglue/pvp.py](tasks/superglue/pvp.py) 中添加一个 `PVP` ，用于填空问题。更多细节可以在这里找到   [here](tasks/superglue/README.md) 。
-
+- To apply GLM to a new NLU dataset with cloze-filling finetuning, implement a `DataProcessor` in
+  [tasks/superglue/dataset.py](tasks/superglue/dataset.py) for data loading and add a `PVP` in
+  [tasks/superglue/pvp.py](tasks/superglue/pvp.py) for the cloze question. More details can be found
+  [here](tasks/superglue/README.md).
 
 ### Seq2Seq
 
-- 下载[Gigaword](https://github.com/harvardnlp/sent-summary)
+- Download the [Gigaword](https://github.com/harvardnlp/sent-summary)
   , [CNN/Daily Mail](https://github.com/artmatsak/cnn-dailymail)
-  or [XSum](https://github.com/EdinburghNLP/XSum/tree/master/XSum-Dataset)  数据集，并检查实验设置在  [scripts/ds_finetune_seq2seq.sh](scripts/ds_finetune_seq2seq.sh) 中。将 `DATA_ROOT`、`CHECKPOINT_PATH`、`SAVE_PATH` 更改为本地路径
+  or [XSum](https://github.com/EdinburghNLP/XSum/tree/master/XSum-Dataset) dataset and check the experiment setup in
+  [scripts/ds_finetune_seq2seq.sh](scripts/ds_finetune_seq2seq.sh). Change `DATA_ROOT, CHECKPOINT_PATH, SAVE_PATH` to
+  your
+  local path.
 
-- 行以下脚本（以 CNN/Daily Mail 数据集为例）。
+- Run the following script (use the CNN/Daily Mail dataset as an example)
 
   ```
   bash scripts/ds_finetune_seq2seq.sh \ 
      config_tasks/model_blocklm_10B.sh \ 
      config_tasks/seq_cnndm_org.sh
   ```
-
-- summaries 要被写入  `./runs/experiment_name/test.jsonl.hyps` 。参考文献在同一目录的 `test.jsonl.refs` 中写入。要计算 `rouge` ，请安装 [file2rouge](https://github.com/pltrdy/files2rouge)   并从 [here](http://nlp.stanford.edu/software/stanford-corenlp-full-2016-10-31.zip)  下载 Stanford CoreNLP。运行以下脚本:
-
-```
-bash scripts/evaluate_seq2seq.sh \
-./runs/experiment_name/test.jsonl.hyps ./runs/experiment_name/test.jsonl.refs
-```
+- The summaries are written into `./runs/experiment_name/test.jsonl.hyps`. The references are written
+  into `test.jsonl.refs` in the same directory. For calculating rouge,
+  install [file2rouge](https://github.com/pltrdy/files2rouge) and download Stanford CoreNLP
+  from [here](http://nlp.stanford.edu/software/stanford-corenlp-full-2016-10-31.zip). Run the following script
+  ```
+  bash scripts/evaluate_seq2seq.sh \
+   ./runs/experiment_name/test.jsonl.hyps ./runs/experiment_name/test.jsonl.refs
+  ```
 
 #### Train with your own data
-> 用自己的数据进行训练
 
-请将您的 `seq2seq` 数据处理成 `{split}.source` 和 `{split}.target`，每行代表一个样本的上下文 或 目标， `split` 可以是 `train` 、`val` 或 `test`。
+Process your seq2seq data into `{split}.source` and `{split}.target`, with each line being the context or the target of
+a sample, and `split` being `train`, `val`, and `test`.
 
-这句话的意思是，需要将 seq2seq 的数据分为 train、val 和 test 三个部分，每个部分都包含两个文件，分别是 {split}.source 和 {split}.target。其中，{split}.source 文件包含每个样本的上下文，{split}.target 文件包含每个样本的目标。
-运行下面的脚本: 
+Run the following script
 
 ```shell
 bash scripts/ds_finetune_seq2seq.sh \ 
@@ -312,35 +333,30 @@ bash scripts/ds_finetune_seq2seq.sh \
    config_tasks/seq_customization.sh
 ```
 
-你可以在 `config_tasks/seq_customization.sh` 和 `config_tasks/config_blocklm_10B_cnndm.json` 中指定超参数。
+You can specify the hyperparameters in `config_tasks/seq_customization.sh`
+and `config_tasks/config_blocklm_10B_cnndm.json`
 
 ### Multiple Choice (Zero-shot)
-> 多项选择（零样本）
-
 
 ```shell
 bash scripts/evaluate_multichoice.sh config_tasks/model_blocklm_10B.sh
 ```
 
-注意，`CHECKPOINT_PATH` 和 `DATA_PATH` 需要更改为您的本地路径。
+Note that `CHECKPOINT_PATH` and `DATA_PATH` need to be changed to your local path.
 
+The format of each line of the data file should be
 
-数据文件的每一行的格式示例如下：
-
-```shell
+```
 {"inputs_pretokenized": "Context and question here", "choices_pretokenized": ["Choice 1", "Choice 2", "Choice 3"], "label": int}
 ```
 
-
 ### Language Modeling
-> 语言建模
 
 #### LAMBADA Cloze Accuracy
-> LAMBADA 完形填空精度
 
-* 下载[LAMBADA](https://github.com/cybertronai/bflm/blob/master/lambada_test.jsonl) 数据，并在[scripts/evaluate_lm.sh](scripts/evaluate_lm.sh) 中更改  `DATA_ROOT, CHECKPOINT_PATH`。
-
-* 运行以下脚本:
+* Download the [LAMBADA](https://github.com/cybertronai/bflm/blob/master/lambada_test.jsonl) data and change
+  `DATA_ROOT, CHECKPOINT_PATH` in [scripts/evaluate_lm.sh](scripts/evaluate_lm.sh)
+* Run the following script
 
 ```shell
 bash scripts/evaluate_lm.sh \ 
@@ -348,10 +364,7 @@ bash scripts/evaluate_lm.sh \
      config_tasks/zero_lambada.sh 
 ```
 
-
-
 #### LM Perplexity
-> 语言模型的困惑度
 
 * Download
   our [test set of wikibook](https://mailstsinghuaeducn-my.sharepoint.com/:t:/g/personal/duzx16_mails_tsinghua_edu_cn/EQa_B6KY_q1FjtUeG-T52iMBFtNrfhfHcZbzMxfkJKXKRQ?e=inTdHh)
@@ -381,25 +394,21 @@ bash scripts/finetune_blank.sh \
 
 ## Pretrain
 
-运行以下脚本对于使用预训练 GLM-Large 模型。
+Run the following script to pre-train the GLM-Large model
 
 ```shell
 bash scripts/ds_pretrain_nvidia.sh config/ds_block_large.sh
 ```
 
-通过脚本 [scripts/ds_pretrain_nvidia.sh](scripts/ds_pretrain_nvidia.sh)  使用 DeepSpeed 启动训练程序。
+The script [scripts/ds_pretrain_nvidia.sh](scripts/ds_pretrain_nvidia.sh) launches the training program with DeepSpeed.
+You should change `NUM_WORKERS` and `NUM_GPUS_PER_WORKER` to the number of workers and the number of gpus per worker.
+Also change `HOST_FILE_PATH` to the path to an OpenMPI-style hostfile. More details about DeepSpeed launcher can be
+found [here](https://www.deepspeed.ai/getting-started/#resource-configuration-multi-node).
 
-您应该将 `NUM_WORKERS`  和 `NUM_GPUS_PER_WORKER` 更改，对应 `worker 的数量` 和 `每个 worker 的 GPU 数量`。
-
-也可将 `HOST_FILE_PATH` 更改为 `OpenMPI` 样式的 hostfile 的路径。有关 DeepSpeed launcher 的更多细节，请参阅这里 [here](https://www.deepspeed.ai/getting-started/#resource-configuration-multi-node)。
-
-文件 [config/ds_block_large.sh](config/ds_block_large.sh) 定义了预训练的超参数。 
-
-大多数参数都很容易理解。具体举例来说，
-
-`--train-data` 可以是 [data_utils/corpora.py](data_utils/corpora.py) 中的 `NAMED_CORPORA` 定义的多个关键字。优化器的超参数在 `config` 中的相应 json 文件中定义。json 文件的语义可以在这里找到  [here](https://www.deepspeed.ai/docs/config-json) 。
-
-
+The file [config/ds_block_large.sh](config/ds_block_large.sh) defines the hyperparameters for pretraining. Most of the
+arguments are fairly self-explanatory. Specifically, `--train-data` can be multiple keywords defined in `NAMED_CORPORA`
+in [data_utils/corpora.py](data_utils/corpora.py). The hyperparameters of the optimizer are defined in the corresponding
+json file under `config`. The semantics of the json file can be found [here](https://www.deepspeed.ai/docs/config-json).
 
 ## Citation
 
