@@ -15,8 +15,8 @@
 
 import oneflow  as flow
 import oneflow.nn as nn
-from flow.autograd import Variable
-from flow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from oneflow.autograd import Variable
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 import mpu
 

@@ -189,7 +189,7 @@ class DynamicLossScaler:
 TO-DO separate out into an example.
 if __name__ == "__main__":
     import oneflow  as flow
-    from flow.autograd import Variable
+    from oneflow.autograd import Variable
     from dynamic_loss_scaler import DynamicLossScaler
 
     # N is batch size; D_in is input dimension;

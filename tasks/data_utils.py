@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import oneflow  as flow
 import oneflow.utils.data
-from flow.utils.data.dataloader import default_collate
+from oneflow.utils.data.dataloader import default_collate
 
 import mpu
 

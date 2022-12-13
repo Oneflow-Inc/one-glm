@@ -23,9 +23,9 @@
 import contextlib
 import oneflow.distributed as dist
 import oneflow  as flow
-from torch import _C
-from flow.cuda import _lazy_call, device as device_ctx_manager
-#from flow.utils.checkpoint import detach_variable
+from oneflow import _C
+# from oneflow.cuda import _lazy_call, device as device_ctx_manager
+#from oneflow.utils.checkpoint import detach_variable
 
 
 import oneflow.distributed as dist
@@ -94,8 +94,8 @@ def _set_cuda_rng_state(new_state, device=-1):
     if hasattr(_C, '_cuda_setRNGState') and callable(_C._cuda_setRNGState):
         # older PyTorch
         def cb():
-            with device_ctx_manager(device):
-                _C._cuda_setRNGState(new_state)
+            # with device_ctx_manager(device):
+            _C._cuda_setRNGState(new_state)
     else:
         # newer PyTorch
         if device == -1:
@@ -271,7 +271,7 @@ def get_full_inputs(tensors):
         
 
 class CheckpointFunction(flow.autograd.Function):
-    """This function is adapted from flow.utils.checkpoint with
+    """This function is adapted from oneflow.utils.checkpoint with
        two main changes:
            1) flow.cuda.set_rng_state is replaced with `_set_cuda_rng_state`
            2) the states in the model parallel tracker are also properly
@@ -374,7 +374,7 @@ class CheckpointFunction(flow.autograd.Function):
 
 def checkpoint(function, *args):
     """Checkpoint a model or part of the model.
-    This has been directly copied from flow.utils.checkpoint."""
+    This has been directly copied from oneflow.utils.checkpoint."""
     return CheckpointFunction.apply(function, *args)
 
 def partition_activations_in_checkpoint(partition_activation):

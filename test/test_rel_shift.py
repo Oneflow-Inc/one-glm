@@ -10,8 +10,8 @@
 # s = GPT2ParallelSelfAttention._rel_shift(s)
 # print(s)
 
-from flow.nn.modules import Linear
-from flow.optim import Adam
+from oneflow.nn.modules import Linear
+from oneflow.optim import Adam
 from learning_rates import AnnealingLR
 import matplotlib.pyplot as plt
 import numpy as np

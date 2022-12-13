@@ -21,7 +21,7 @@ import numpy as np
 from itertools import accumulate
 
 import oneflow  as flow
-from flow.multiprocessing import Lock
+from oneflow.multiprocessing import Lock
 
 
 def get_lazy_path(path):

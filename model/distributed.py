@@ -14,11 +14,11 @@
 # limitations under the License.
 
 import oneflow  as flow
-from flow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 import oneflow.distributed as dist
-from flow.nn.modules import Module
-from flow.autograd import Variable
-from flow.nn.parallel.distributed import DistributedDataParallel as DDP
+from oneflow.nn.modules import Module
+from oneflow.autograd import Variable
+from oneflow.nn.parallel.distributed import DistributedDataParallel as DDP
 
 import mpu
 

@@ -19,7 +19,7 @@ sys.path.append("../..")
 
 import oneflow  as flow
 import oneflow.nn.init as init
-from flow.nn.parameter import Parameter
+from oneflow.nn.parameter import Parameter
 import mpu
 
 from commons import initialize_distributed

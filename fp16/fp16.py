@@ -15,9 +15,9 @@
 """Stable version of apex FP16 Optimizer"""
 import oneflow  as flow
 from torch import nn
-from flow.autograd import Variable
-from flow.nn.parameter import Parameter
-from flow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from oneflow.autograd import Variable
+from oneflow.nn.parameter import Parameter
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 from .loss_scaler import DynamicLossScaler, LossScaler
 from .fp16util import model_grads_to_master_grads, master_params_to_model_params, clip_grad_norm

@@ -21,7 +21,7 @@
 import oneflow  as flow
 import oneflow.nn.functional as F
 import oneflow.nn.init as init
-from flow.nn.parameter import Parameter
+from oneflow.nn.parameter import Parameter
 
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_world_size
@@ -71,7 +71,7 @@ def _initialize_affine_weight(weight, output_size, input_size,
 class VocabParallelEmbedding(flow.nn.Module):
     """Embedding parallelized in the vocabulary dimension.
 
-    This is mainly adapted from flow.nn.Embedding and all the default
+    This is mainly adapted from oneflow.nn.Embedding and all the default
     values are kept.
     Arguments:
         num_embeddings: vocabulary size.
@@ -130,7 +130,7 @@ class VocabParallelEmbedding(flow.nn.Module):
 class ParallelEmbedding(flow.nn.Module):
     """Embedding parallelized in the embedding dimension.
 
-    This is mainly adapted from flow.nn.Embedding and all the default
+    This is mainly adapted from oneflow.nn.Embedding and all the default
     values are kept.
     Arguments:
         num_embeddings: vocabulary size.

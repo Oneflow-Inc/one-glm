@@ -26,7 +26,7 @@ import random
 import oneflow  as flow
 import tqdm
 
-from flow.utils import data
+from oneflow.utils import data
 import pandas as pd
 import numpy as np
 

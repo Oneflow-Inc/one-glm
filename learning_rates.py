@@ -15,7 +15,7 @@
 """PyTorch DataLoader for TFRecords"""
 
 import oneflow  as flow
-from flow.optim.lr_scheduler import _LRScheduler
+from oneflow.optim.lr_scheduler import _LRScheduler
 import math
 
 

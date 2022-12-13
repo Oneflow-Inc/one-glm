@@ -18,7 +18,7 @@ import os
 import sys
 
 import oneflow  as flow
-from flow.utils import data
+from oneflow.utils import data
 import numpy as np
 
 
@@ -66,11 +66,11 @@ class RandomSampler(data.sampler.Sampler):
             g.manual_seed(self.epoch)
         if self.replacement:
             for _ in range(self.num_samples // 32):
-                yield from flow.randint(high=n, size=(32,), dtype=flow.int64, generator=g).tolist()
-            yield from flow.randint(high=n, size=(self.num_samples % 32,), dtype=flow.int64,
+                yield from oneflow.randint(high=n, size=(32,), dtype=flow.int64, generator=g).tolist()
+            yield from oneflow.randint(high=n, size=(self.num_samples % 32,), dtype=flow.int64,
                                      generator=g).tolist()
         else:
-            yield from flow.randperm(n, generator=self.generator).tolist()
+            yield from oneflow.randperm(n, generator=self.generator).tolist()
 
     def __len__(self):
         return self.num_samples
