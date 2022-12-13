@@ -433,7 +433,7 @@ bash scripts/ds_pretrain_nvidia.sh config/ds_block_large.sh
 
 您应该将 `NUM_WORKERS`  和 `NUM_GPUS_PER_WORKER` 更改，对应 `worker 的数量` 和 `每个 worker 的 GPU 数量`。
 
-也将 `HOST_FILE_PATH` 更改为 `OpenMPI` 样式的 hostfile 的路径。有关 DeepSpeed launcher 的更多细节，请参阅这里 [here](https://www.deepspeed.ai/getting-started/#resource-configuration-multi-node)。
+也可将 `HOST_FILE_PATH` 更改为 `OpenMPI` 样式的 hostfile 的路径。有关 DeepSpeed launcher 的更多细节，请参阅这里 [here](https://www.deepspeed.ai/getting-started/#resource-configuration-multi-node)。
 
 文件 [config/ds_block_large.sh](config/ds_block_large.sh) 定义了预训练的超参数。 
 
