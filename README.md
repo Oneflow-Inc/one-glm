@@ -1,8 +1,52 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+- [one-glm](#one-glm)
+- [GLM](#glm)
+  - [Pretrained Models](#pretrained-models)
+  - [Results](#results)
+    - [SuperGLUE](#superglue)
+    - [Seq2Seq](#seq2seq)
+    - [Language Modeling](#language-modeling)
+  - [Get Started](#get-started)
+      - [Generation](#generation)
+      - [Classification](#classification)
+    - [Manual Installation](#manual-installation)
+    - [Clone this repo](#clone-this-repo)
+    - [Model Parallelism](#model-parallelism)
+  - [Usage](#usage)
+    - [Left-to-Right Generation / Blank Filling (Interactive)](#left-to-right-generation--blank-filling-interactive)
+      - [Usage of `[MASK]` (Entity Prediction):](#usage-of-mask-entity-prediction)
+        - [Example1](#example1)
+        - [Example2 (Chinese)](#example2-chinese)
+      - [Usage of `[sMASK]` (Sentence Prediction)](#usage-of-smask-sentence-prediction)
+        - [Example3](#example3)
+        - [Example4 (Chinese)](#example4-chinese)
+      - [Usage of `[gMASK]` (Long Text Generation)](#usage-of-gmask-long-text-generation)
+        - [Example5 (Chinese)](#example5-chinese)
+        - [Example1](#example1-1)
+        - [Example2 (Chinese)](#example2-chinese-1)
+    - [SuperGLUE](#superglue-1)
+    - [Seq2Seq](#seq2seq-1)
+      - [Train with your own data](#train-with-your-own-data)
+    - [Multiple Choice (Zero-shot)](#multiple-choice-zero-shot)
+    - [Language Modeling](#language-modeling-1)
+      - [LAMBADA Cloze Accuracy](#lambada-cloze-accuracy)
+      - [LM Perplexity](#lm-perplexity)
+    - [Text Infilling](#text-infilling)
+  - [Pretrain](#pretrain)
+  - [Citation](#citation)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+
 # one-glm
 同步最新的glm版本 ，github链接: https://github.com/THUDM/GLM
 
-## GLM 
-GLM是一种通用语言模型，使用自回归填空目标进行预训练，使用在各种自然语言理解和生成任务上。
+# GLM 
+
+
+GLM是一种通用语言模型，使用自回归填空目标进行预训练，被使用在各种自然语言理解和生成任务中。
 
 请参考我们的论文了解GLM的详细描述：
 [GLM: General Language Model Pretraining with Autoregressive Blank Infilling](https://arxiv.org/abs/2103.10360) (ACL
@@ -397,7 +441,7 @@ bash scripts/ds_pretrain_nvidia.sh config/ds_block_large.sh
 
 大多数参数都很容易理解。具体举例来说，
 
-`--train-data` 可以是 [data_utils/corpora.py](data_utils/corpora.py) 中的 `NAMED_CORPORA` 定义的多个关键字。优化器的超参数在 `config` 中的相应 json 文件中定义。json 文件的语义可以在这里找到  [here](https://www.deepspeed.ai/docs/config-json) 。
+`--train-data` 是[data_utils/corpora.py](data_utils/corpora.py) 中的 字典对象：`NAMED_CORPORA` 里面定义的多个关键字的数据集。优化器的超参数在 `config` 中的相应 json 文件中定义。json 文件的语义可以在这里找到  [here](https://www.deepspeed.ai/docs/config-json) 。
 
 
 
