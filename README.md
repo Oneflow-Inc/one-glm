@@ -209,8 +209,7 @@ python change_mp.py path_to_the_checkpoint 2
 将 `CHECKPOINT_PATH` 更改为您的本地路径。运行以下脚本
 
 ```
-bash scripts/generate_block.sh \
-     config_tasks/model_blocklm_10B_chinese.sh
+bash scripts/generate_block.sh config_tasks/model_blocklm_10B_chinese.sh
 ```
 
 有些模型（GLM-2B，GLM-10B和GLM-10B-Chinese）使用了三种不同的掩码标记：“[MASK]”用于短的填空，“[sMASK]”用于句子填空，“[gMASK]”用于从左到右的生成。
