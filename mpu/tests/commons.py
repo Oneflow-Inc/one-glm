@@ -77,6 +77,6 @@ def print_separator(message):
     filler_len = (78 - len(message)) // 2
     filler = '-' * filler_len
     string = '\n' + filler + ' {} '.format(message) + filler
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print(string, flush=True)
     flow.distributed.barrier()

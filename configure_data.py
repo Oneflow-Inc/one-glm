@@ -154,8 +154,8 @@ def prepare_tokenizer(args):
 
 
 def make_data_loader(dataset, tokenizer, batch_size, num_iters, args, shuffle=False, block_collate=False):
-    world_size = flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
-    rank = flow.distributed.get_rank(group=mpu.get_data_parallel_group())
+    world_size = int(os.getenv("WORLD_SIZE", 1))
+    rank = int(os.getenv("LOCAL_RANK", -1))
     if args.loader_scatter is not None:
         rank = rank // args.loader_scatter
         world_size = world_size // args.loader_scatter
@@ -252,7 +252,7 @@ def make_loaders(args, tokenizer):
 
     if args.use_tfrecords:
         return make_tfrecord_loaders(args)
-    # flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
+    # int(os.getenv("WORLD_SIZE", 1))
     world_size = int(os.getenv("WORLD_SIZE", 1)) 
     if args.loader_scatter is not None:
         assert world_size % args.loader_scatter == 0
@@ -367,7 +367,7 @@ def build_multi_task_dataset(args, tokenizer):
                 SuperGlueDataset(args, task, data_dir, multi_seq_length, "dev", tokenizer, pattern_ensemble=True))
         train = MultiTaskDataset(args.multi_task_data, train_datasets)
         valid = MultiTaskDataset(args.multi_task_data, valid_datasets)
-        world_size = flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
+        world_size = int(os.getenv("WORLD_SIZE", 1))
         multi_batch_size = args.batch_size * world_size
         if args.multi_batch_size is not None:
             multi_batch_size = args.multi_batch_size * world_size

@@ -320,7 +320,8 @@ def train(model, optimizer, lr_scheduler,
     """Train the model."""
 
     # Turn on training mode which enables dropout.
-    model.train()
+    # model.train()
+    model.eval()
 
     # Tracking loss.
     total_lm_loss = 0.0

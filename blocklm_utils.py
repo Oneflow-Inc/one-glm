@@ -373,7 +373,7 @@ class ConstructBlockStrategy:
                         last_index = i + 1
                 if last_index < len(tokens):
                     sentence_spans.append((last_index, len(tokens)))
-                if not sentence_spans and flow.distributed.get_rank() == 0:
+                if not sentence_spans and int(os.getenv("RANK", -1)) == 0:
                     try:
                         print(self.tokenizer.DecodeIds(tokens[1:]))
                     except IndexError:

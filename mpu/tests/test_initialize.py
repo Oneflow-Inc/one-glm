@@ -25,7 +25,7 @@ from commons import print_separator
 
 def test_initialize_model_parallel(model_parallel_size):
 
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('> testing initialize_model_parallel with size {} ...'.format(
             model_parallel_size))
     model_parallel_size_ = min(model_parallel_size,
@@ -41,7 +41,7 @@ def test_initialize_model_parallel(model_parallel_size):
 
     # Model parallel.
     world_size = model_parallel_size_
-    rank = flow.distributed.get_rank() % model_parallel_size_
+    rank = int(os.getenv("RANK", -1)) % model_parallel_size_
     assert world_size == mpu.get_model_parallel_world_size()
     assert rank == mpu.get_model_parallel_rank()
     check(mpu.get_model_parallel_group(), world_size, rank)
@@ -49,7 +49,7 @@ def test_initialize_model_parallel(model_parallel_size):
 
     # Data parallel.
     world_size = flow.distributed.get_world_size() // model_parallel_size_
-    rank = flow.distributed.get_rank() // model_parallel_size
+    rank = int(os.getenv("RANK", -1)) // model_parallel_size
     assert world_size == mpu.get_data_parallel_world_size()
     assert rank == mpu.get_data_parallel_rank()
     check(mpu.get_data_parallel_group(), world_size, rank)
@@ -58,13 +58,13 @@ def test_initialize_model_parallel(model_parallel_size):
     mpu.destroy_model_parallel()
 
     flow.distributed.barrier()
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('>> passed the test :-)')
 
 
 def test_get_model_parallel_src_rank(model_parallel_size_):
 
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('> testing get_model_parallel_src_rank with size {} ...'.format(
             model_parallel_size_))
     model_parallel_size = min(model_parallel_size_,
@@ -74,14 +74,14 @@ def test_get_model_parallel_src_rank(model_parallel_size_):
     assert mpu.model_parallel_is_initialized()
 
     # Checks
-    src_rank = flow.distributed.get_rank() - mpu.get_model_parallel_rank()
+    src_rank = int(os.getenv("RANK", -1)) - mpu.get_model_parallel_rank()
     assert mpu.get_model_parallel_src_rank() == src_rank
 
     # Reset groups
     mpu.destroy_model_parallel()
 
     flow.distributed.barrier()
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('>> passed the test :-)')
 
 

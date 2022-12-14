@@ -46,6 +46,9 @@ def clip_grad_norm(parameters, max_norm, norm_type=2):
     Returns:
         Total norm of the parameters (viewed as a single vector).
     """
+    return 
+
+    
     if isinstance(parameters, flow.Tensor):
         parameters = [parameters]
     parameters = list(filter(lambda p: p.grad is not None, parameters))

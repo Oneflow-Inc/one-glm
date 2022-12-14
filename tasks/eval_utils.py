@@ -57,7 +57,7 @@ def accuracy_func_provider(single_dataset_provider, metric_dict, args, is_test=F
     # Build dataloaders.
     global global_tokenizer
     global_tokenizer = tokenizer
-    if only_rank0 and flow.distributed.is_initialized() and flow.distributed.get_rank() != 0:
+    if only_rank0 and flow.distributed.is_initialized() and int(os.getenv("RANK", -1)) != 0:
         return None
     if is_test and not args.eval_valid:
         datapaths = args.test_data if args.test_data is not None else ['test']
@@ -86,7 +86,7 @@ def accuracy_func_provider(single_dataset_provider, metric_dict, args, is_test=F
             start_time = time.time()
             predictions, labels, examples = eval_func(model, dataloader, example_dict, args)
             elapsed_time = time.time() - start_time
-            if output_predictions and flow.distributed.get_rank() == 0:
+            if output_predictions and int(os.getenv("RANK", -1)) == 0:
                 filename = os.path.join(args.log_dir, name + '.jsonl')
                 output_func(predictions, examples, filename)
             total_count = len(predictions)

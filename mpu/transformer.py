@@ -302,7 +302,7 @@ class ParallelSelfAttention(flow.nn.Module):
             max_attention_scores = attention_scores.max(dim=-1, keepdim=True)[0]
             attention_scores -= max_attention_scores
             attention_scores *= self.attention_scale
-        # if flow.distributed.get_rank() == 0:
+        # if int(os.getenv("RANK", -1)) == 0:
         #     print(min_attention_scores, attention_scores.max().item())
         attention_scores = attention_scores + (-65504.0) * (1.0 - ltor_mask)
         # Attention probabilities. [b, np, s, s]

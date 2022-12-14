@@ -59,7 +59,7 @@ def mpu_cross_entropy(batch_size, seq_length, vocab_size,
 
 def test_cross_entropy(model_parallel_size):
 
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('> testing cross entropy with model parallel size {} ...'.
               format(model_parallel_size))
 
@@ -82,19 +82,19 @@ def test_cross_entropy(model_parallel_size):
 
     error = loss_flow.sub_(loss_mpu).abs().max()
     print('   max error in loss on global rank {}: {}'.format(
-        flow.distributed.get_rank(), error))
+        int(os.getenv("RANK", -1)), error))
     assert error < 1.0e-6
 
     error = grad_flow.sub_(grad_mpu).abs().max()
     print('   max error in grad on global rank {}: {}'.format(
-        flow.distributed.get_rank(), error))
+        int(os.getenv("RANK", -1)), error))
     assert error < 1.0e-6
 
     # Reset groups
     mpu.destroy_model_parallel()
 
     flow.distributed.barrier()
-    if flow.distributed.get_rank() == 0:
+    if int(os.getenv("RANK", -1)) == 0:
         print('>> passed the test :-)')
 
 

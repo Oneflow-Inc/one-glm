@@ -23,7 +23,7 @@ def load_pretrained(model, checkpoint_path, args, task_tokens=None):
     checkpoint_name = get_checkpoint_name(load_dir, tag, release)
     if mpu.get_data_parallel_rank() == 0:
         print('global rank {} is loading pretrained model {}'.format(
-            flow.distributed.get_rank(), checkpoint_name))
+            int(os.getenv("RANK", -1)), checkpoint_name))
     # Load the checkpoint.
     sd = flow.load(checkpoint_name, map_location='cpu')
     if args.deepspeed:
@@ -149,15 +149,15 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
         model = FP16_Module(model)
 
     # Wrap model for distributed training.
-    if not args.deepspeed and (args.train_iters or args.epochs):
-        if args.DDP_impl == 'torch':
-            i = flow.cuda.current_device()
-            model = TorchDDP(model, device_ids=[i], output_device=i,
-                             process_group=mpu.get_data_parallel_group())
-        elif args.DDP_impl == 'local':
-            model = LocalDDP(model)
-        else:
-            print_rank_0("Skip DDP model")
+    # if not args.deepspeed and (args.train_iters or args.epochs):
+    #     if args.DDP_impl == 'torch':
+    #         i = flow.cuda.current_device()
+    #         model = TorchDDP(model, device_ids=[i], output_device=i,
+    #                          process_group=mpu.get_data_parallel_group())
+    #     elif args.DDP_impl == 'local':
+    #         model = LocalDDP(model)
+    #     else:
+    #         print_rank_0("Skip DDP model")
     return model
 
 
@@ -246,30 +246,35 @@ def get_learning_rate_scheduler(optimizer, args):
     return lr_scheduler
 
 
+def load_torch_model(model, path):
+    import torch
+    torch_params = torch.load(path, map_location='cpu')
+    flow_params = {}
+    for k in torch_params.keys():
+        flow_params[k] = flow.Tensor(
+            torch_params[k].numpy().astype("float32"))
+    model.load_state_dict(flow_params, strict=False)
+    print("load pretraining model succeed!")
+
 def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_labels=None, spell_length=None):
     """Setup model and optimizer."""
 
     model = get_model(args, model_type=model_type, multi_token=multi_token, num_labels=num_labels,
                       spell_length=spell_length)
+    
+
+    load_torch_model(model,"/home/fengwen/datasets/mo.pt")    
+    print(f"/home/fengwen/datasets/mo.pt  is load")
+
     param_groups = get_optimizer_param_groups(model)
 
-    if args.train_data is not None or args.data_dir is not None and (args.epochs > 0 or args.train_iters > 0):
-        if args.deepspeed:
-            print_rank_0("DeepSpeed is enabled.")
-
-            model, optimizer, _, _ = deepspeed.initialize(
-                model=model,
-                model_parameters=param_groups,
-                args=args,
-                mpu=mpu,
-                dist_init_required=False
-            )
-        else:
-            optimizer = get_optimizer(param_groups, args)
-        lr_scheduler = get_learning_rate_scheduler(optimizer, args)
-    else:
-        optimizer, lr_scheduler = None, None
-
+    optimizer = flow.optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            momentum=0.9,
+            weight_decay=0.0,
+        )
+    lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000) 
     return model, optimizer, lr_scheduler
 
 
