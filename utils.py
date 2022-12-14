@@ -181,13 +181,14 @@ def report_memory(name):
 
     mega_bytes = 1024.0 * 1024.0
     string = name + ' memory (MB)'
-    string += ' | allocated: {}'.format(
-        flow.cuda.memory_allocated() / mega_bytes)
-    string += ' | max allocated: {}'.format(
-        flow.cuda.max_memory_allocated() / mega_bytes)
-    string += ' | cached: {}'.format(flow.cuda.memory_cached() / mega_bytes)
-    string += ' | max cached: {}'.format(
-        flow.cuda.memory_reserved() / mega_bytes)
+    string += ' | allocated: {}'.format('None')
+        # flow.cuda.memory_allocated() / mega_bytes)
+    string += ' | max allocated: {}'.format('None')
+        # flow.cuda.max_memory_allocated() / mega_bytes)
+    # string += ' | cached: {}'.format(flow.cuda.memory_cached() / mega_bytes)
+    string += ' | cached: {}'.format('None')
+    string += ' | max cached: {}'.format('None')
+        # flow.cuda.memory_reserved() / mega_bytes)
     print_rank_0(string)
 
 

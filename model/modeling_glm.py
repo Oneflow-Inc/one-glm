@@ -36,14 +36,7 @@ def init_method_normal(std=0.02):
 
     return init_
 
-
 class GLMModel(flow.nn.Module):
-    """GLM Language model.
-
-    The output of the forward method are the logits (parallel or
-    serial depending on the `parallel_output` flag.
-    """
-
     def __init__(self,
                  num_layers,
                  vocab_size,
@@ -66,10 +59,26 @@ class GLMModel(flow.nn.Module):
                  ):
 
         super(GLMModel, self).__init__()
-
-        self.parallel_output = parallel_output
-        self.output_predict = output_predict
+        
+        self.num_layers = num_layers
+        self.vocab_size = vocab_size
         self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.embedding_dropout_prob = embedding_dropout_prob
+        self.attention_dropout_prob = attention_dropout_prob
+        self.output_dropout_prob = output_dropout_prob
+        self.max_sequence_length = max_sequence_length
+        self.max_memory_length = max_memory_length
+        self.checkpoint_activations = checkpoint_activations
+        self.checkpoint_num_layers = checkpoint_num_layers
+        self.parallel_output = parallel_output
+        self.relative_encoding = relative_encoding
+        self.block_position_encoding = block_position_encoding
+        self.output_predict = output_predict
+        self.spell_length = spell_length
+        self.spell_func = spell_func
+        self.attention_scale = attention_scale
+
 
         init_method = init_method_normal(std=0.02)
 
@@ -91,8 +100,6 @@ class GLMModel(flow.nn.Module):
                                                        attention_scale=attention_scale,
                                                        relative_encoding=relative_encoding,
                                                        block_position_encoding=block_position_encoding)
-        if spell_length is not None:
-            self.prompt_spell = PromptSpell(spell_length, self.hidden_size, spell_func)
 
     def freeze_transformer(self, tune_prefix_layers=None):
         log_str = "Freeze transformer"
@@ -102,37 +109,128 @@ class GLMModel(flow.nn.Module):
             log_str += f" tune {tune_prefix_layers} prefix layers"
             for i in range(tune_prefix_layers):
                 self.transformer.layers[i].requires_grad_(True)
-        print_rank_0(log_str)
 
-    def forward(self, input_ids, position_ids, attention_mask, *mems, return_memory=False, detach_memory=True,
-                prompt_pos=None):
+    def forward(self, input_ids, position_ids, attention_mask):
         # Embeddings.
         batch_size = input_ids.size(0)
+        
         words_embeddings = self.word_embeddings(input_ids)
         embeddings = words_embeddings
-        if prompt_pos is not None:
-            embeddings = embeddings.clone()
-            prompt_embeds = self.prompt_spell()
-            batch_index = flow.arange(batch_size, device=input_ids.device).unsqueeze(1)
-            embeddings[batch_index, prompt_pos] = prompt_embeds
+
         # Transformer.
-        transformer_output = self.transformer(embeddings, position_ids, attention_mask, mems,
-                                              return_memory=return_memory, detach_memory=detach_memory)
+        transformer_output = self.transformer(embeddings, position_ids, attention_mask)
         logits, hidden_layers = transformer_output
         outputs = hidden_layers
-
+        
+        #True
         if self.output_predict:
-            # Parallel logits.
-            logits_parallel = mpu.copy_to_model_parallel_region(
-                logits)
-            logits_parallel = F.linear(logits_parallel, self.word_embeddings.weight)
 
+            logits_parallel = logits
+            logits_parallel = F.linear(logits_parallel, self.word_embeddings.weight)
+            
             if self.parallel_output:
                 return (logits_parallel, *outputs)
-
-            return (mpu.gather_from_model_parallel_region(logits_parallel), *outputs)
+            
+            return (logits_parallel, *outputs)
         else:
             return (logits, *outputs)
+
+# class GLMModel(flow.nn.Module):
+#     """GLM Language model.
+
+#     The output of the forward method are the logits (parallel or
+#     serial depending on the `parallel_output` flag.
+#     """
+
+#     def __init__(self,
+#                  num_layers,
+#                  vocab_size,
+#                  hidden_size,
+#                  num_attention_heads,
+#                  embedding_dropout_prob,
+#                  attention_dropout_prob,
+#                  output_dropout_prob,
+#                  max_sequence_length,
+#                  max_memory_length,
+#                  checkpoint_activations,
+#                  checkpoint_num_layers=1,
+#                  parallel_output=True,
+#                  relative_encoding=False,
+#                  block_position_encoding=False,
+#                  output_predict=True,
+#                  spell_length=None,
+#                  spell_func='lstm',
+#                  attention_scale=1.0,
+#                  ):
+
+#         super(GLMModel, self).__init__()
+
+#         self.parallel_output = parallel_output
+#         self.output_predict = output_predict
+#         self.hidden_size = hidden_size
+
+#         init_method = init_method_normal(std=0.02)
+
+#         # Word embeddings (parallel).
+#         self.word_embeddings = mpu.VocabParallelEmbedding(
+#             vocab_size, hidden_size, init_method=init_method)
+
+#         # Transformer
+#         self.transformer = mpu.GPT2ParallelTransformer(num_layers,
+#                                                        hidden_size,
+#                                                        num_attention_heads,
+#                                                        max_sequence_length,
+#                                                        max_memory_length,
+#                                                        embedding_dropout_prob,
+#                                                        attention_dropout_prob,
+#                                                        output_dropout_prob,
+#                                                        checkpoint_activations,
+#                                                        checkpoint_num_layers,
+#                                                        attention_scale=attention_scale,
+#                                                        relative_encoding=relative_encoding,
+#                                                        block_position_encoding=block_position_encoding)
+#         if spell_length is not None:
+#             self.prompt_spell = PromptSpell(spell_length, self.hidden_size, spell_func)
+
+#     def freeze_transformer(self, tune_prefix_layers=None):
+#         log_str = "Freeze transformer"
+#         self.word_embeddings.requires_grad_(False)
+#         self.transformer.requires_grad_(False)
+#         if tune_prefix_layers is not None:
+#             log_str += f" tune {tune_prefix_layers} prefix layers"
+#             for i in range(tune_prefix_layers):
+#                 self.transformer.layers[i].requires_grad_(True)
+#         print_rank_0(log_str)
+
+#     def forward(self, input_ids, position_ids, attention_mask, *mems, return_memory=False, detach_memory=True,
+#                 prompt_pos=None):
+#         # Embeddings.
+#         batch_size = input_ids.size(0)
+#         words_embeddings = self.word_embeddings(input_ids)
+#         embeddings = words_embeddings
+#         if prompt_pos is not None:
+#             embeddings = embeddings.clone()
+#             prompt_embeds = self.prompt_spell()
+#             batch_index = flow.arange(batch_size, device=input_ids.device).unsqueeze(1)
+#             embeddings[batch_index, prompt_pos] = prompt_embeds
+#         # Transformer.
+#         transformer_output = self.transformer(embeddings, position_ids, attention_mask, mems,
+#                                               return_memory=return_memory, detach_memory=detach_memory)
+#         logits, hidden_layers = transformer_output
+#         outputs = hidden_layers
+
+#         if self.output_predict:
+#             # Parallel logits.
+#             logits_parallel = mpu.copy_to_model_parallel_region(
+#                 logits)
+#             logits_parallel = F.linear(logits_parallel, self.word_embeddings.weight)
+
+#             if self.parallel_output:
+#                 return (logits_parallel, *outputs)
+
+#             return (mpu.gather_from_model_parallel_region(logits_parallel), *outputs)
+#         else:
+#             return (logits, *outputs)
 
 
 class EncoderDecoder(flow.nn.Module):

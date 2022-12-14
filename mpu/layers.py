@@ -21,6 +21,8 @@
 import oneflow  as flow
 import oneflow.nn.functional as F
 import oneflow.nn.init as init
+import os 
+
 from oneflow.nn.parameter import Parameter
 
 from .initialize import get_model_parallel_rank
@@ -181,147 +183,253 @@ class ParallelEmbedding(flow.nn.Module):
 
 
 class ColumnParallelLinear(flow.nn.Module):
-    """Linear layer with column parallelism.
-
-    The linear layer is defined as Y = XA + b. A is parallelized along
-    its second dimension as A = [A_1, ..., A_p].
-
-    Arguments:
-        input_size: first dimension of matrix A.
-        output_size: second dimension of matrix A.
-        bias: If true, add bias
-        gather_output: If true, call all-gether on output and make Y avaiable
-                       to all GPUs, otherwise, every GPU will have its output
-                       which is Y_i = XA_i
-        init_method: method to initialize weights. Note that bias is always set
-                     to zero.
-        stride: For the strided linear layers.
-        keep_master_weight_for_test: This was added for testing and should be
-                                     set to False. It returns the master weights
-                                     used for initialization.
-    """
     def __init__(self, input_size, output_size, bias=True, gather_output=True,
                  init_method=init.xavier_normal_, stride=1,
-                 keep_master_weight_for_test=False):
+                 keep_master_weight_for_test=False, 
+                 if_use_gelu=False, 
+                 if_use_dropout=False, 
+                 dropout_rate=0.0
+                 ):
         super(ColumnParallelLinear, self).__init__()
 
-        # Keep input parameters
+        self.if_use_gelu = if_use_gelu
+        self.if_use_dropout = if_use_dropout
+        self.dropout_rate = dropout_rate
+
         self.input_size = input_size
         self.output_size = output_size
         self.gather_output = gather_output
-        # Divide the weight matrix along the last dimension.
-        world_size = get_model_parallel_world_size()
+        
+        world_size = int(os.getenv("WORLD_SIZE", '1'))
+        # world_size = get_model_parallel_world_size()
+
         self.output_size_per_partition = divide(output_size, world_size)
 
-        # Parameters.
-        # Note: flow.nn.functional.linear performs XA^T + b and as a result
-        # we allocate the transpose.
         self.weight = Parameter(flow.Tensor(self.output_size_per_partition,
                                              self.input_size))
         # self.weight.model_parallel = True
-        # True
         if bias:
             self.bias = Parameter(flow.Tensor(self.output_size_per_partition))
-            # self.bias.model_parallel = True
-            # Always initialize bias to zero.
-            with flow.no_grad():
-                self.bias.zero_()
+
         else:
             self.register_parameter('bias', None)
 
-        # Initialize weight.
         self.master_weight = _initialize_affine_weight(
             self.weight, self.output_size, self.input_size,
             self.output_size_per_partition, 0, init_method,
             stride=stride, return_master_weight=keep_master_weight_for_test)
 
     def forward(self, input_):
-        # Set up backprop all-reduce.
-        input_parallel = copy_to_model_parallel_region(input_)
-        # Matrix multiply.
-        output_parallel = F.linear(input_parallel, self.weight, self.bias)
-        if self.gather_output:
-            # All-gather across the partitions.
-            output = gather_from_model_parallel_region(output_parallel)
-        else:
-            output = output_parallel
-        return output
+        input_parallel = input_
+
+        # previous 
+        # output_parallel = F.linear(input_parallel, self.weight, self.bias)
+
+        # Fused!
+        output_parallel = F.linear(input_parallel, self.weight)
+        if self.if_use_gelu: 
+            return flow._C.fused_bias_add_gelu(output_parallel, self.bias, axis=2)
+        elif self.dropout_rate - 0.0 < 1e-9:
+            return flow._C.bias_add(output_parallel, self.bias, axis=2)
+        elif self.if_use_dropout: 
+            return flow._C.fused_bias_add_dropout(output_parallel, self.bias, p=self.dropout_rate, axis=2)
+        else: 
+            # Do nothing
+            return flow._C.bias_add(output_parallel, self.bias, axis=2)
+# class ColumnParallelLinear(flow.nn.Module):
+#     """Linear layer with column parallelism.
+
+#     The linear layer is defined as Y = XA + b. A is parallelized along
+#     its second dimension as A = [A_1, ..., A_p].
+
+#     Arguments:
+#         input_size: first dimension of matrix A.
+#         output_size: second dimension of matrix A.
+#         bias: If true, add bias
+#         gather_output: If true, call all-gether on output and make Y avaiable
+#                        to all GPUs, otherwise, every GPU will have its output
+#                        which is Y_i = XA_i
+#         init_method: method to initialize weights. Note that bias is always set
+#                      to zero.
+#         stride: For the strided linear layers.
+#         keep_master_weight_for_test: This was added for testing and should be
+#                                      set to False. It returns the master weights
+#                                      used for initialization.
+#     """
+#     def __init__(self, input_size, output_size, bias=True, gather_output=True,
+#                  init_method=init.xavier_normal_, stride=1,
+#                  keep_master_weight_for_test=False):
+#         super(ColumnParallelLinear, self).__init__()
+
+#         # Keep input parameters
+#         self.input_size = input_size
+#         self.output_size = output_size
+#         self.gather_output = gather_output
+#         # Divide the weight matrix along the last dimension.
+#         world_size = get_model_parallel_world_size()
+#         self.output_size_per_partition = divide(output_size, world_size)
+
+#         # Parameters.
+#         # Note: flow.nn.functional.linear performs XA^T + b and as a result
+#         # we allocate the transpose.
+#         self.weight = Parameter(flow.Tensor(self.output_size_per_partition,
+#                                              self.input_size))
+#         # self.weight.model_parallel = True
+#         # True
+#         if bias:
+#             self.bias = Parameter(flow.Tensor(self.output_size_per_partition))
+#             # self.bias.model_parallel = True
+#             # Always initialize bias to zero.
+#             with flow.no_grad():
+#                 self.bias.zero_()
+#         else:
+#             self.register_parameter('bias', None)
+
+#         # Initialize weight.
+#         self.master_weight = _initialize_affine_weight(
+#             self.weight, self.output_size, self.input_size,
+#             self.output_size_per_partition, 0, init_method,
+#             stride=stride, return_master_weight=keep_master_weight_for_test)
+
+#     def forward(self, input_):
+#         # Set up backprop all-reduce.
+#         input_parallel = copy_to_model_parallel_region(input_)
+#         # Matrix multiply.
+#         output_parallel = F.linear(input_parallel, self.weight, self.bias)
+#         if self.gather_output:
+#             # All-gather across the partitions.
+#             output = gather_from_model_parallel_region(output_parallel)
+#         else:
+#             output = output_parallel
+#         return output
 
 
 class RowParallelLinear(flow.nn.Module):
-    """Linear layer with row parallelism.
-
-    The linear layer is defined as Y = XA + b. A is parallelized along
-    its first dimension and X along its second dimension as:
-               -   -
-              | A_1 |
-              | .   |
-          A = | .   |        X = [X_1, ..., X_p]
-              | .   |
-              | A_p |
-               -   -
-    Arguments:
-        input_size: first dimension of matrix A.
-        output_size: second dimension of matrix A.
-        bias: If true, add bias. Note that bias is not parallelized.
-        input_is_parallel: If true, we assume that the input is already
-                           split across the GPUs and we do not split
-                           again.
-        init_method: method to initialize weights. Note that bias is always set
-                     to zero.
-        stride: For the strided linear layers.
-        keep_master_weight_for_test: This was added for testing and should be
-                                     set to False. It returns the master weights
-                                     used for initialization.
-    """
     def __init__(self, input_size, output_size, bias=True,
                  input_is_parallel=False,
                  init_method=init.xavier_normal_, stride=1,
-                 keep_master_weight_for_test=False):
+                 keep_master_weight_for_test=False, 
+                 if_use_gelu=False, 
+                 if_use_dropout=False, 
+                 dropout_rate=0.0):
         super(RowParallelLinear, self).__init__()
 
-        # Keep input parameters
+        self.if_use_gelu = if_use_gelu 
+        self.if_use_dropout = if_use_dropout
+        self.dropout_rate = dropout_rate
+
         self.input_size = input_size
         self.output_size = output_size
         self.input_is_parallel = input_is_parallel
-        # Divide the weight matrix along the last dimension.
-        world_size = get_model_parallel_world_size()
+
+        world_size = 1
+        # world_size = get_model_parallel_world_size()
+
         self.input_size_per_partition = divide(input_size, world_size)
 
-        # Parameters.
-        # Note: flow.nn.functional.linear performs XA^T + b and as a result
-        # we allocate the transpose.
+    
         self.weight = Parameter(flow.Tensor(self.output_size,
                                              self.input_size_per_partition))
         # self.weight.model_parallel = True
-        # True
+
         if bias:
             self.bias = Parameter(flow.Tensor(self.output_size))
-            # Always initialize bias to zero.
-            with flow.no_grad():
-                self.bias.zero_()
         else:
             self.register_parameter('bias', None)
-
-        # Initialize weight.
         self.master_weight = _initialize_affine_weight(
             self.weight, self.output_size, self.input_size,
             self.input_size_per_partition, 1, init_method,
             stride=stride, return_master_weight=keep_master_weight_for_test)
 
     def forward(self, input_):
-        # Set up backprop all-reduce.
-        if self.input_is_parallel:
-            input_parallel = input_
-        else:
-            input_parallel = scatter_to_model_parallel_region(input_)
-        # Matrix multiply.
-        output_parallel = F.linear(input_parallel, self.weight)
-        # All-reduce across all the partitions.
-        output_ = reduce_from_model_parallel_region(output_parallel)
-        if self.bias is not None:
-            output = output_ + self.bias
-        else:
-            output = output_
-        return output
+        
+        # Fused!
+        output_parallel = F.linear(input_, self.weight)
+        if self.if_use_gelu: 
+            return flow._C.fused_bias_add_gelu(output_parallel, self.bias, axis=2)
+        elif self.dropout_rate - 0.0 < 1e-9:
+            return flow._C.bias_add(output_parallel, self.bias, axis=2)
+        elif self.if_use_dropout: 
+            return flow._C.fused_bias_add_dropout(output_parallel, self.bias, p=self.dropout_rate, axis=2)
+        else: 
+            # Do nothing
+            return flow._C.bias_add(output_parallel, self.bias, axis=2)
+
+
+# class RowParallelLinear(flow.nn.Module):
+#     """Linear layer with row parallelism.
+
+#     The linear layer is defined as Y = XA + b. A is parallelized along
+#     its first dimension and X along its second dimension as:
+#                -   -
+#               | A_1 |
+#               | .   |
+#           A = | .   |        X = [X_1, ..., X_p]
+#               | .   |
+#               | A_p |
+#                -   -
+#     Arguments:
+#         input_size: first dimension of matrix A.
+#         output_size: second dimension of matrix A.
+#         bias: If true, add bias. Note that bias is not parallelized.
+#         input_is_parallel: If true, we assume that the input is already
+#                            split across the GPUs and we do not split
+#                            again.
+#         init_method: method to initialize weights. Note that bias is always set
+#                      to zero.
+#         stride: For the strided linear layers.
+#         keep_master_weight_for_test: This was added for testing and should be
+#                                      set to False. It returns the master weights
+#                                      used for initialization.
+#     """
+#     def __init__(self, input_size, output_size, bias=True,
+#                  input_is_parallel=False,
+#                  init_method=init.xavier_normal_, stride=1,
+#                  keep_master_weight_for_test=False):
+#         super(RowParallelLinear, self).__init__()
+
+#         # Keep input parameters
+#         self.input_size = input_size
+#         self.output_size = output_size
+#         self.input_is_parallel = input_is_parallel
+#         # Divide the weight matrix along the last dimension.
+#         world_size = get_model_parallel_world_size()
+#         self.input_size_per_partition = divide(input_size, world_size)
+
+#         # Parameters.
+#         # Note: flow.nn.functional.linear performs XA^T + b and as a result
+#         # we allocate the transpose.
+#         self.weight = Parameter(flow.Tensor(self.output_size,
+#                                              self.input_size_per_partition))
+#         # self.weight.model_parallel = True
+#         # True
+#         if bias:
+#             self.bias = Parameter(flow.Tensor(self.output_size))
+#             # Always initialize bias to zero.
+#             with flow.no_grad():
+#                 self.bias.zero_()
+#         else:
+#             self.register_parameter('bias', None)
+
+#         # Initialize weight.
+#         self.master_weight = _initialize_affine_weight(
+#             self.weight, self.output_size, self.input_size,
+#             self.input_size_per_partition, 1, init_method,
+#             stride=stride, return_master_weight=keep_master_weight_for_test)
+
+#     def forward(self, input_):
+#         # Set up backprop all-reduce.
+#         if self.input_is_parallel:
+#             input_parallel = input_
+#         else:
+#             input_parallel = scatter_to_model_parallel_region(input_)
+#         # Matrix multiply.
+#         output_parallel = F.linear(input_parallel, self.weight)
+#         # All-reduce across all the partitions.
+#         output_ = reduce_from_model_parallel_region(output_parallel)
+#         if self.bias is not None:
+#             output = output_ + self.bias
+#         else:
+#             output = output_
+#         return output
 

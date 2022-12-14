@@ -265,7 +265,7 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
                       spell_length=spell_length)
     
 
-    # load_torch_model(model,"/home/fengwen/datasets/mo.pt")    
+    load_torch_model(model,"/home/fengwen/datasets/mo.pt")    
     print(f"/home/fengwen/datasets/mo.pt  is load"*100)
 
     param_groups = get_optimizer_param_groups(model)
@@ -352,7 +352,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
             lm_loss /= args.gradient_accumulation_steps
 
         reduced_loss = lm_loss.detach().clone().view(1)
-        flow.distributed.all_reduce(reduced_loss.data, group=mpu.get_data_parallel_group())
+        # flow.distributed.all_reduce(reduced_loss.data, group=mpu.get_data_parallel_group())
         reduced_loss.data = reduced_loss.data / (args.world_size / args.model_parallel_size)
 
         if not DynamicLossScaler._has_inf_or_nan(reduced_loss):

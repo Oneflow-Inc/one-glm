@@ -114,7 +114,7 @@ def _set_cuda_rng_state(new_state, device=-1):
             default_generator = flow.cuda.default_generators[idx]
             default_generator.set_state(new_state)
 
-    _lazy_call(cb)
+    # _lazy_call(cb)
 
 
 
@@ -167,25 +167,25 @@ class CudaRNGStatesTracker:
         # Reset rng state to what it was.
         # _set_cuda_rng_state(orig_rng_state)
 
-    @contextlib.contextmanager
-    def fork(self, name=_MODEL_PARALLEL_RNG_TRACKER_NAME):
-        """Fork the cuda rng state, perform operations, and exit with
-        the original state."""
-        # Check if we have added the state
-        if name not in self.states_:
-            raise Exception('cuda rng state {} is not added'.format(name))
-        # Store current rng state.
-        orig_cuda_rng_state = flow.cuda.get_rng_state()
-        # Set rng state to the desired one
-        _set_cuda_rng_state(self.states_[name])
-        # Do the stuff we wanted to do.
-        try:
-            yield
-        finally:
-            # Update the current rng state for later use.
-            self.states_[name] = flow.cuda.get_rng_state()
-            # And set the state to the original state we started with.
-            _set_cuda_rng_state(orig_cuda_rng_state)
+    # @contextlib.contextmanager
+    # def fork(self, name=_MODEL_PARALLEL_RNG_TRACKER_NAME):
+    #     """Fork the cuda rng state, perform operations, and exit with
+    #     the original state."""
+    #     # Check if we have added the state
+    #     if name not in self.states_:
+    #         raise Exception('cuda rng state {} is not added'.format(name))
+    #     # Store current rng state.
+    #     orig_cuda_rng_state = flow.cuda.get_rng_state()
+    #     # Set rng state to the desired one
+    #     _set_cuda_rng_state(self.states_[name])
+    #     # Do the stuff we wanted to do.
+    #     try:
+    #         yield
+    #     finally:
+    #         # Update the current rng state for later use.
+    #         self.states_[name] = flow.cuda.get_rng_state()
+    #         # And set the state to the original state we started with.
+    #         _set_cuda_rng_state(orig_cuda_rng_state)
 
 
 # RNG tracker object.
