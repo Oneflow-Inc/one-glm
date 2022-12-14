@@ -428,7 +428,8 @@ bash scripts/finetune_blank.sh \
 运行以下脚本对于使用预训练 GLM-Large 模型。
 
 ```shell
-bash scripts/ds_pretrain_nvidia.sh config/ds_block_large.sh
+bash scripts/ds_pretrain_nvidia.sh  \ 
+config/ds_block_large.sh
 ```
 
 通过脚本 [scripts/ds_pretrain_nvidia.sh](scripts/ds_pretrain_nvidia.sh)  使用 DeepSpeed 启动训练程序。
