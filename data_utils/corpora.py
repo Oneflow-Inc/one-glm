@@ -481,7 +481,8 @@ class Stories(PromptReader):
 
 
 class BertBaseData(BertData):
-    PATH = '/root/data/formatted_one_article_per_line'
+    # PATH = '/root/data/formatted_one_article_per_line'
+    PATH = '/home/fengwen/datasets/other/dataset/glm_train.txt'
 
 
 class BertLargeData(BertData):

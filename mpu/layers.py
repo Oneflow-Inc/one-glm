@@ -25,9 +25,9 @@ from oneflow.nn.parameter import Parameter
 
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_world_size
-from .mappings import copy_to_model_parallel_region
+# from .mappings import copy_to_model_parallel_region
 from .mappings import gather_from_model_parallel_region
-from .mappings import reduce_from_model_parallel_region
+# from .mappings import reduce_from_model_parallel_region
 from .mappings import scatter_to_model_parallel_region
 from .utils import divide
 from .utils import VocabUtility
@@ -125,7 +125,9 @@ class VocabParallelEmbedding(flow.nn.Module):
         # Mask the output embedding.
         output_parallel[input_mask, :] = 0.0
         # Reduce across all the model parallel GPUs.
-        output = reduce_from_model_parallel_region(output_parallel)
+        # output = reduce_from_model_parallel_region(output_parallel)
+        
+        output = output_parallel
         return output
 
 

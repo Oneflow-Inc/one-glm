@@ -1,6 +1,7 @@
 import deepspeed
 import oneflow  as flow
 # from apex.optimizers import FusedAdam as Adam
+import os 
 from oneflow.optim import Adam 
 
 from oneflow import distributed as dist
@@ -249,10 +250,11 @@ def get_learning_rate_scheduler(optimizer, args):
 def load_torch_model(model, path):
     import torch
     torch_params = torch.load(path, map_location='cpu')
+
     flow_params = {}
-    for k in torch_params.keys():
+    for k,v in torch_params.items():
         flow_params[k] = flow.Tensor(
-            torch_params[k].numpy().astype("float32"))
+            v.numpy().astype("float32"))
     model.load_state_dict(flow_params, strict=False)
     print("load pretraining model succeed!")
 
@@ -263,8 +265,8 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
                       spell_length=spell_length)
     
 
-    load_torch_model(model,"/home/fengwen/datasets/mo.pt")    
-    print(f"/home/fengwen/datasets/mo.pt  is load")
+    # load_torch_model(model,"/home/fengwen/datasets/mo.pt")    
+    print(f"/home/fengwen/datasets/mo.pt  is load"*100)
 
     param_groups = get_optimizer_param_groups(model)
 

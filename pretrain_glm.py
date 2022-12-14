@@ -266,7 +266,9 @@ def forward_step(data_iterator, model, args, timers, mems):
     loss = flow.sum(losses.view(-1) * loss_mask)
     if loss_mask.sum().item() > 0:
         loss = loss / loss_mask.sum()
-
+    
+    with open("/home/fengwen/one-glm/runs/glm_flow_fp32_loss.txt",'a') as f:
+        f.write(str(loss.item())+'\n')
     return loss, mems, mode
 
 

@@ -310,11 +310,12 @@ class ConstructBlockStrategy:
         return new_samples
 
     def construct_blocks(self, samples):
-        worker_info = flow.utils.data.get_worker_info()
-        if worker_info is not None:
-            worker_id, num_workers = worker_info.id, worker_info.num_workers
-        else:
-            worker_id, num_workers = 0, 1
+        # worker_info = flow.utils.data.get_worker_info()
+        # if worker_info is not None:
+        #     worker_id, num_workers = worker_info.id, worker_info.num_workers
+        # else:
+        #     worker_id, num_workers = 0, 1
+        worker_id, num_workers = 0, 1
         rng = random.Random((self.count * num_workers + worker_id) * self.world_size + self.rank)
         self.count += 1
         token_batch, target_batch, loss_mask_batch, position_id_batch = [], [], [], []

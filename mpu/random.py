@@ -51,7 +51,7 @@ def see_memory_usage(message, force=False):
 from .initialize import get_data_parallel_rank
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_world_size
-from .initialize import get_model_parallel_group
+# from .initialize import get_model_parallel_group
 
 mp_rank = None #get_model_parallel_rank()
 mp_size = None #get_model_parallel_world_size()
@@ -374,10 +374,10 @@ class CheckpointFunction(flow.autograd.Function):
         return (None,) + tuple(inp.grad for inp in detached_inputs)
 
 
-def checkpoint(function, *args):
-    """Checkpoint a model or part of the model.
-    This has been directly copied from oneflow.utils.checkpoint."""
-    return CheckpointFunction.apply(function, *args)
+# def checkpoint(function, *args):
+#     """Checkpoint a model or part of the model.
+#     This has been directly copied from oneflow.utils.checkpoint."""
+#     return CheckpointFunction.apply(function, *args)
 
 def partition_activations_in_checkpoint(partition_activation):
     global PARTITION_ACTIVATIONS

@@ -89,11 +89,11 @@ def model_parallel_is_initialized():
     return True
 
 
-def get_model_parallel_group():
-    """Get the model parallel group the caller rank belongs to."""
-    assert _MODEL_PARALLEL_GROUP is not None, \
-        'model parallel group is not initialized'
-    return _MODEL_PARALLEL_GROUP
+# def get_model_parallel_group():
+#     """Get the model parallel group the caller rank belongs to."""
+#     assert _MODEL_PARALLEL_GROUP is not None, \
+#         'model parallel group is not initialized'
+#     return _MODEL_PARALLEL_GROUP
 
 
 def get_data_parallel_group():

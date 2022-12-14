@@ -28,7 +28,8 @@ from .mappings import gather_from_model_parallel_region
 
 import deepspeed
 
-from .random import checkpoint
+# from .random import checkpoint
+
 from .random import get_cuda_rng_tracker
 
 from .utils import divide
@@ -566,6 +567,7 @@ class ParallelTransformerLayer(flow.nn.Module):
 
         # Layer norm at the begining of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
+        
         mem = self.input_layernorm(mem) if mem is not None else None
         # Self attention.
         attention_output = self.attention(layernorm_output, ltor_mask, position_embeddings, r_w_bias, r_r_bias, mem)

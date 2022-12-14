@@ -25,7 +25,7 @@ import math
 inf = math.inf
 
 
-from .initialize import get_model_parallel_group
+# # from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
 
 
