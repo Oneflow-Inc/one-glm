@@ -30,7 +30,7 @@ from .mappings import gather_from_model_parallel_region
 
 import deepspeed
 
-# from .random import checkpoint
+from .random import checkpoint
 
 from .random import get_cuda_rng_tracker
 
@@ -1022,7 +1022,7 @@ class GPT2ParallelTransformer(flow.nn.Module):
                     args += [position_embeddings, self.r_w_bias, self.r_r_bias]
                 if memory_states:
                     args += memory_states[l: l + chunk_length]
-                hidden_states = checkpoint(custom(l, l + chunk_length), *args)
+                hidden_states =checkpoint(custom(l, l + chunk_length), *args)
                 l += chunk_length
         else:
             for i, layer in enumerate(self.layers):
