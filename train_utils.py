@@ -68,6 +68,8 @@ def load_pretrained(model, checkpoint_path, args, task_tokens=None):
 def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_length=None):
     """Build the model."""
     print_rank_0('building GPT2 model ...')
+    # print(f'{args.pretrained_bert=}')
+    # False
     if args.pretrained_bert:
         if model_type == "multiple_choice":
             model = BertForMultipleChoice.from_pretrained(args.tokenizer_model_type,
@@ -133,6 +135,8 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
             else:
                 raise NotImplementedError(model_type)
 
+    print(f'{(mpu.get_data_parallel_rank() == 0)=}')
+    # True
     if mpu.get_data_parallel_rank() == 0:
         print(' > number of parameters on model parallel rank {}: {}'.format(
             mpu.get_model_parallel_rank(),

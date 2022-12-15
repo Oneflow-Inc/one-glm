@@ -13,24 +13,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import reduce
 import oneflow  as flow
 
 # from .initialize import get_model_parallel_group
 from .utils import split_tensor_along_last_dim
 
 
-# def _reduce(input_):
-#     """All-reduce the the input tensor across model parallel group."""
-#     group = get_model_parallel_group()
+def _reduce(input_):
+    """All-reduce the the input tensor across model parallel group."""
+    return input_
+    # group = get_model_parallel_group()
 
-#     # Bypass the function if we are using only 1 GPU.
-#     if flow.distributed.get_world_size(group=group) == 1:
-#         return input_
+    # # Bypass the function if we are using only 1 GPU.
+    # if flow.distributed.get_world_size(group=group) == 1:
+    #     return input_
 
-#     # All-reduce.
-#     flow.distributed.all_reduce(input_, group=group)
+    # # All-reduce.
+    # flow.distributed.all_reduce(input_, group=group)
 
-#     return input_
+    # return input_
 
 
 def _split(input_):
@@ -76,16 +78,16 @@ def _gather(input_):
     return output
 
 
-# class _CopyToModelParallelRegion(flow.autograd.Function):
-#     """Pass the input to the model parallel region."""
+class _CopyToModelParallelRegion(flow.autograd.Function):
+    """Pass the input to the model parallel region."""
 
-#     @staticmethod
-#     def forward(ctx, input_):
-#         return input_
+    @staticmethod
+    def forward(ctx, input_):
+        return input_
 
-#     @staticmethod
-#     def backward(ctx, grad_output):
-#         return _reduce(grad_output)
+    @staticmethod
+    def backward(ctx, grad_output):
+        return _reduce(grad_output)
 
 
 # class _ReduceFromModelParallelRegion(flow.autograd.Function):
@@ -128,8 +130,8 @@ class _GatherFromModelParallelRegion(flow.autograd.Function):
 # Helper functions.
 # -----------------
 
-# def copy_to_model_parallel_region(input_):
-#     return _CopyToModelParallelRegion.apply(input_)
+def copy_to_model_parallel_region(input_):
+    return _CopyToModelParallelRegion.apply(input_)
 
 # def reduce_from_model_parallel_region(input_):
 #     return _ReduceFromModelParallelRegion.apply(input_)

@@ -217,8 +217,7 @@ def forward_step(data_iterator, model, args, timers, mems):
     else:
         data = next(data_iterator[0]) if data_iterator[0] else None
     # print_rank_0("data iterator")
-    print(data)
-    exit(0)
+
     timers('data loader').stop()
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data, args)
     timers('batch generator').stop()
@@ -256,19 +255,35 @@ def forward_step(data_iterator, model, args, timers, mems):
                   tokenizer.DecodeIds(labels[batch_id, last_index:].tolist()).encode('utf-8'),
                   position_ids_[batch_id, last_index:].tolist(), block_position_ids[batch_id, last_index:].tolist())
 
+    # print(f'{(data is not None and "mode" in data)=}')
+    # True
     if data is not None and "mode" in data:
         mode = data['mode']
     else:
         mode = 'bert'
 
+    # print(f'{type(tokens)=}')
+    # print(f'{tokens=}')
+    # print(f'{type(position_ids)=}')
+    # print(f'{position_ids=}')
+    # print(f'{type(attention_mask)=}')
+    # print(f'{attention_mask=}')
+
     logits, *mems = model(tokens, position_ids, attention_mask, *mems)
+    print("="*50)
+    print(logits)
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
                                               labels)
     loss_mask = loss_mask.view(-1)
     loss = flow.sum(losses.view(-1) * loss_mask)
+    
+    
+    # print(f'{(loss_mask.sum().item() > 0)=}')
+    # True
     if loss_mask.sum().item() > 0:
         loss = loss / loss_mask.sum()
     
+    print(f'{loss.item()=}')
     with open("/home/fengwen/one-glm/runs/glm_flow_fp32_loss.txt",'a') as f:
         f.write(str(loss.item())+'\n')
     return loss, mems, mode
@@ -626,6 +641,7 @@ def main():
         multi_train_iterator = iter(multi_train_data)
     else:
         multi_train_iterator = None
+    
     if val_data is not None:
         val_data_iterator = iter(val_data)
     else:
