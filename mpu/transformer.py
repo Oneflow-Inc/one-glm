@@ -735,7 +735,6 @@ class GPT2ParallelTransformer(flow.nn.Module):
         self.layers = flow.nn.ModuleList(
             [get_layer() for _ in range(num_layers)])
 
-        print("=06"*50) # is fix
 
         # Final layer norm before output.
         self.final_layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon)
@@ -748,7 +747,7 @@ class GPT2ParallelTransformer(flow.nn.Module):
     def forward(self, hidden_states, position_ids, attention_mask, memory_states=None, encoder_states=None,
                 return_memory=False, detach_memory=True):
         batch_size, query_length = hidden_states.size()[:2]
-        print("=02"*50)# is down
+      
         # print(hidden_states, position_ids, attention_mask, memory_states, encoder_states,return_memory, detach_memory)
 
         memory_length = memory_states[0].size(1) if memory_states else 0
@@ -804,7 +803,6 @@ class GPT2ParallelTransformer(flow.nn.Module):
                 hidden_states = hidden_states + block_position_embeddings
         hidden_states = self.embedding_dropout(hidden_states)
 
-        print("=04"*50)# is down
         # print(hidden_states)
 
 
@@ -836,7 +834,7 @@ class GPT2ParallelTransformer(flow.nn.Module):
             return custom_forward
 
 
-        print('=05'*50) # is down
+        # print('=05'*50) # is down
         # print(hidden_states)
         # print(f'{self.checkpoint_activations=}')
  

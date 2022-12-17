@@ -262,16 +262,8 @@ def forward_step(data_iterator, model, args, timers, mems):
     else:
         mode = 'bert'
 
-    # print(f'{type(tokens)=}')
-    # print(f'{tokens=}')
-    # print(f'{type(position_ids)=}')
-    # print(f'{position_ids=}')
-    # print(f'{type(attention_mask)=}')
-    # print(f'{attention_mask=}')
 
     logits, *mems = model(tokens, position_ids, attention_mask, *mems)
-    print("="*50)
-    print(logits)
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
                                               labels)
     loss_mask = loss_mask.view(-1)
@@ -665,7 +657,7 @@ def main():
                                            (train_data_iterator, multi_train_iterator),
                                            (val_data_iterator, multi_val_iterator),
                                            timers, args, summary_writer=summary_writer)
-
+        input("do val")
         if args.do_valid:
             prefix = 'the end of training for val data'
             val_loss = evaluate_and_print_results(prefix, (val_data_iterator, multi_val_iterator),
@@ -674,16 +666,16 @@ def main():
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, lr_scheduler, args)
 
-    # if test_data is not None:
-    #     test_data_iterator = iter(test_data)
-    # else:
-    #     test_data_iterator = None
+    if test_data is not None:
+        test_data_iterator = iter(test_data)
+    else:
+        test_data_iterator = None
 
-    # if args.do_test:
-    #     # Run on test data.
-    #     prefix = 'the end of training for test data'
-    #     evaluate_and_print_results(prefix, (test_data_iterator, None),
-    #                                model, args, timers, verbose=True, forward_step_func=forward_step)
+    if args.do_test:
+        # Run on test data.
+        prefix = 'the end of training for test data'
+        evaluate_and_print_results(prefix, (test_data_iterator, None),
+                                   model, args, timers, verbose=True, forward_step_func=forward_step)
 
 
 if __name__ == "__main__":

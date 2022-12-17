@@ -108,9 +108,7 @@ class GLMModel(flow.nn.Module):
                 prompt_pos=None):
         # Embeddings.
         batch_size = input_ids.size(0)
-        print("=01"*50)# is down
-        # print(f'{batch_size=}')
-        # print(f'{input_ids=}')
+      
         words_embeddings = self.word_embeddings(input_ids)
         # print(f'{words_embeddings=}')
         embeddings = words_embeddings
@@ -124,7 +122,6 @@ class GLMModel(flow.nn.Module):
         # Transformer.
         transformer_output = self.transformer(embeddings, position_ids, attention_mask, mems,
                                               return_memory=return_memory, detach_memory=detach_memory)
-        print("=00"*50)# is up
         logits, hidden_layers = transformer_output
         outputs = hidden_layers
 
