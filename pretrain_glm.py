@@ -382,16 +382,16 @@ def train(model, optimizer, lr_scheduler,
                 timers.log(['forward', 'backward', 'allreduce', 'optimizer',
                             'batch generator', 'data loader'],
                            normalizer=args.log_interval)
-        # Checkpointing
-        if args.save and args.save_interval and args.iteration % args.save_interval == 0:
-            save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args)
+        # # Checkpointing
+        # if args.save and args.save_interval and args.iteration % args.save_interval == 0:
+        #     save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args)
 
-        # Evaluation
-        if args.eval_interval and args.iteration % args.eval_interval == 0 and args.do_valid:
-            prefix = 'iteration {}'.format(args.iteration)
-            evaluate_and_print_results(
-                prefix, val_data_iterator, model, args, timers, verbose=False, step=args.iteration,
-                summary_writer=summary_writer, forward_step_func=forward_step)
+        # # Evaluation
+        # if args.eval_interval and args.iteration % args.eval_interval == 0 and args.do_valid:
+        #     prefix = 'iteration {}'.format(args.iteration)
+        #     evaluate_and_print_results(
+        #         prefix, val_data_iterator, model, args, timers, verbose=False, step=args.iteration,
+        #         summary_writer=summary_writer, forward_step_func=forward_step)
 
     return args.iteration, skipped_iters
 
@@ -581,6 +581,7 @@ def main():
     global tokenizer
     tokenizer = prepare_tokenizer(args)
     train_data, val_data, test_data, = get_train_val_test_data(args, tokenizer)
+    val_data, test_data = None,None
     multi_train_data, multi_val_data = None, None
     if args.multi_task_ratio > 0.0:
         multi_train_data, multi_val_data = build_multi_task_dataset(args, tokenizer)
@@ -647,9 +648,9 @@ def main():
     iteration = 0
     if args.train_iters > 0:
         if args.do_train:
-            with ExitStack() as stack:
-                def save_on_exit(args_, model_, optimizer_, lr_scheduler_):
-                    save_checkpoint(args_.iteration, model_, optimizer_, lr_scheduler_, args_)
+            # with ExitStack() as stack:
+            #     def save_on_exit(args_, model_, optimizer_, lr_scheduler_):
+            #         save_checkpoint(args_.iteration, model_, optimizer_, lr_scheduler_, args_)
 
                 # stack.callback(save_on_exit, args, model, optimizer, lr_scheduler)
                 iteration, skipped = train(model, optimizer,
@@ -657,25 +658,7 @@ def main():
                                            (train_data_iterator, multi_train_iterator),
                                            (val_data_iterator, multi_val_iterator),
                                            timers, args, summary_writer=summary_writer)
-        input("do val")
-        if args.do_valid:
-            prefix = 'the end of training for val data'
-            val_loss = evaluate_and_print_results(prefix, (val_data_iterator, multi_val_iterator),
-                                                  model, args, timers, verbose=False, forward_step_func=forward_step)
-
-    if args.save and iteration != 0:
-        save_checkpoint(iteration, model, optimizer, lr_scheduler, args)
-
-    if test_data is not None:
-        test_data_iterator = iter(test_data)
-    else:
-        test_data_iterator = None
-
-    if args.do_test:
-        # Run on test data.
-        prefix = 'the end of training for test data'
-        evaluate_and_print_results(prefix, (test_data_iterator, None),
-                                   model, args, timers, verbose=True, forward_step_func=forward_step)
+       
 
 
 if __name__ == "__main__":
