@@ -219,7 +219,7 @@ def split_ds(ds, split=None, shuffle=True, save_splits=None, load_splits=None):
         assert len(inds) == ds_len
         print_rank_0(f"Load split indices from {load_splits}")
     elif save_splits is not None:
-        if int(os.getenv("RANK", -1)) == 0:
+        if flow.env.get_rank() == 0:
             np.save(save_splits, inds)
             print(f"Save split indices to {save_splits}")
     start_idx = 0

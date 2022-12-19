@@ -269,7 +269,7 @@ def _train(model, optimizer, lr_scheduler, forward_step,
                     print_rank_0(f"Found best {validation_metric} {best_score} at {best_iteration}")
                     save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args, tag="best", barrier=False,
                                     only_changed_parameters=True, no_deepspeed=True, no_save_optim=True)
-                    if int(os.getenv("RANK", -1)) == 0:
+                    if flow.env.get_rank() == 0:
                         score_dict.update({"type": "validation", "epoch": epoch})
                         with open(os.path.join(args.log_dir, "results.json"), "w") as output:
                             output.write(json.dumps(score_dict) + "\n")
@@ -398,7 +398,7 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
     timers('pretrained checkpoint').stop()
     args.iteration = 0
     summary_writer = None
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         args.log_dir = get_log_dir(base=args.summary_dir, name=args.experiment_name)
         if os.path.exists(os.path.join(args.log_dir, "test_results.json")) and args.load is None and not args.overwrite:
             raise ValueError("Output directory ({}) already exists and is not empty.".format(args.log_dir))
@@ -433,7 +433,7 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
         if end_of_train_callback is not None:
             print_rank_0('evaluation only mode, setting epoch to -1')
             score_dict = end_of_train_callback(model, epoch=-1, output_predictions=True)
-    if score_dict is not None and int(os.getenv("RANK", -1)) == 0:
+    if score_dict is not None and flow.env.get_rank() == 0:
         score_dict.update({"type": "test"})
         with open(os.path.join(args.log_dir, "test_results.json"), "w") as output:
             output.write(json.dumps(score_dict) + "\n")

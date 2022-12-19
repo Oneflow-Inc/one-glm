@@ -22,7 +22,15 @@ import deepspeed
 import json
 from utils import get_hostname
 
-
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 def add_model_config_args(parser):
     """Model arguments"""
     
@@ -44,6 +52,8 @@ def add_model_config_args(parser):
                        help='num of transformer attention heads')
     group.add_argument('--hidden-size', type=int, default=1024,
                        help='transformer hidden size')
+    group.add_argument('--debug_loss', type=str2bool, default=False,
+                       help="debug loss or not")
     group.add_argument('--intermediate-size', type=int, default=None,
                        help='transformer embedding dimension for FFN'
                             'set to 4*`--hidden-size` if it is None')
@@ -81,9 +91,10 @@ def add_fp16_config_args(parser):
     """Mixed precision arguments."""
 
     group = parser.add_argument_group('fp16', 'fp16 configurations')
-
+    group.add_argument('--graph_fp16', action='store_true',
+                       help='Run model in fp16 mode in graph')
     group.add_argument('--fp16', action='store_true',
-                       help='Run model in fp16 mode')
+                       help='Run model in fp16 mode in eager')
     group.add_argument('--fp32-embedding', action='store_true',
                        help='embedding in fp32')
     group.add_argument('--fp32-layernorm', action='store_true',
@@ -110,7 +121,8 @@ def add_training_args(parser):
     """Training arguments."""
 
     group = parser.add_argument_group('train', 'training configurations')
-
+    group.add_argument('--debug_pretrain_model', type=str, default='None',
+                       help='debug pretrain model path')
     group.add_argument('--experiment-name', type=str, default="glm",
                        help="The experiment name for summary and checkpoint")
     group.add_argument('--batch-size', type=int, default=4,
@@ -268,7 +280,7 @@ def add_data_args(parser):
     """Train/valid/test data arguments."""
 
     group = parser.add_argument_group('data', 'data configurations')
-
+  
     group.add_argument('--model-parallel-size', type=int, default=1,
                        help='size of the model parallel.')
     group.add_argument('--shuffle', action='store_true',
@@ -308,7 +320,7 @@ def add_data_args(parser):
     group.add_argument('--presplit-sentences', action='store_true',
                        help='Dataset content consists of documents where '
                             'each document consists of newline separated sentences')
-    group.add_argument('--num-workers', type=int, default=2,
+    group.add_argument('--num-workers', type=int, default=1,
                        help="""Number of workers to use for dataloading""")
     group.add_argument('--tokenizer-model-type', type=str,
                        default=None,
@@ -358,6 +370,8 @@ def add_data_args(parser):
 
 def add_finetune_config_args(parser):
     group = parser.add_argument_group('finetune', 'finetune configurations')
+    group.add_argument('--loss_txt_path', type=str, default='None',
+                       help='debug loss txt write path')
     group.add_argument('--task', type=str, help='Task name.')
     group.add_argument('--load-pretrained', type=str, help="Load pretrained model", default=None)
     group.add_argument('--pool-token', type=str, choices=['start', 'pad', 'cls'],

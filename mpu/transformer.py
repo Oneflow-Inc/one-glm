@@ -16,26 +16,52 @@
 """Transformer."""
 
 import math
-import os 
-import oneflow  as flow
+import os
+import oneflow as flow
 import oneflow.nn.init as init
+import deepspeed
 # from apex.normalization.fused_layer_norm import FusedLayerNorm as LayerNorm
-from  oneflow.nn import LayerNorm
-
-
+from oneflow.nn import LayerNorm
 from .initialize import get_model_parallel_world_size
 from .layers import ColumnParallelLinear
 from .layers import RowParallelLinear
 from .mappings import gather_from_model_parallel_region
-
-import deepspeed
-
 from .random import checkpoint
-
 from .random import get_cuda_rng_tracker
-
 from .utils import divide
 from .utils import split_tensor_along_last_dim
+
+
+class GLMGraph(flow.nn.Graph):
+    def __init__(self, args, model, optimizer, lr_scheduler):
+        super().__init__()
+        self.glm = model
+        self.add_optimizer(optimizer, lr_sch=lr_scheduler)
+        self.config.allow_fuse_add_to_output(True)
+        self.config.allow_fuse_model_update_ops(True)
+        if args.graph_fp16:
+            print("using amp fp16!!")
+            self.config.enable_amp(True)
+            grad_scaler = flow.amp.GradScaler(
+                init_scale=2 ** 30,
+                growth_factor=2.0,
+                backoff_factor=0.5,
+                growth_interval=2000,
+            )
+            self.set_grad_scaler(grad_scaler)
+
+    def build(self, tokens, position_ids, attention_mask, labels, loss_mask,*mems):
+
+        logits, *mems = self.glm(tokens, position_ids, attention_mask)
+
+        losses = flow._C.sparse_softmax_cross_entropy(logits, labels)
+
+        loss_mask = loss_mask.view((-1,))
+        loss = flow.sum(losses.view(-1) * loss_mask)
+
+        loss = loss / loss_mask.sum()
+        loss.backward()
+        return loss
 
 
 class PositionalEmbedding(flow.nn.Module):
@@ -44,7 +70,8 @@ class PositionalEmbedding(flow.nn.Module):
 
         self.hidden_size = hidden_size
 
-        inv_freq = 1 / (10000 ** (flow.arange(0.0, hidden_size, 2.0) / hidden_size))
+        inv_freq = 1 / \
+            (10000 ** (flow.arange(0.0, hidden_size, 2.0) / hidden_size))
         self.register_buffer('inv_freq', inv_freq)
 
     def forward(self, pos_seq, bsz=None):
@@ -103,8 +130,8 @@ class ParallelCrossAttention(flow.nn.Module):
         size [b, np, s, hn].
         """
         new_tensor_shape = tensor.size()[:-1] + \
-                           (self.num_attention_heads_per_partition,
-                            self.hidden_size_per_attention_head)
+            (self.num_attention_heads_per_partition,
+             self.hidden_size_per_attention_head)
         tensor = tensor.view(*new_tensor_shape)
         return tensor.permute(0, 2, 1, 3)
 
@@ -115,20 +142,22 @@ class ParallelCrossAttention(flow.nn.Module):
         # Attention heads. [b, s, hp]
         mixed_query_layer = self.query(hidden_states)
         mixed_x_layer = self.key_value(encoder_states)
-        (mixed_key_layer, mixed_value_layer) = split_tensor_along_last_dim(mixed_x_layer, 2)
+        (mixed_key_layer, mixed_value_layer) = split_tensor_along_last_dim(
+            mixed_x_layer, 2)
 
         # Reshape and transpose [b, np, s, hn]
         query_layer = self._transpose_for_scores(mixed_query_layer)
         key_layer = self._transpose_for_scores(mixed_key_layer)
         value_layer = self._transpose_for_scores(mixed_value_layer)
         # Raw attention scores. [b, np, s, s]
-        attention_scores = flow.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_scores = flow.matmul(
+            query_layer, key_layer.transpose(-1, -2))
         attention_scores = attention_scores / math.sqrt(
             self.hidden_size_per_attention_head)
         if cross_mask is not None:
             # Apply the left to right attention mask.
             attention_scores = flow.mul(attention_scores, cross_mask) - \
-                               10000.0 * (1.0 - cross_mask)
+                10000.0 * (1.0 - cross_mask)
 
         # Attention probabilities. [b, np, s, s]
         attention_probs = flow.nn.Softmax(dim=-1)(attention_scores)
@@ -143,7 +172,7 @@ class ParallelCrossAttention(flow.nn.Module):
         # [b, s, np, hn]
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + \
-                                  (self.hidden_size_per_partition,)
+            (self.hidden_size_per_partition,)
         # [b, s, hp]
         context_layer = context_layer.view(*new_context_layer_shape)
 
@@ -153,7 +182,7 @@ class ParallelCrossAttention(flow.nn.Module):
 
         return output
 
-       
+
 class ParallelSelfAttention(flow.nn.Module):
     """Parallel self-attention layer for GPT2.
 
@@ -229,8 +258,8 @@ class ParallelSelfAttention(flow.nn.Module):
         size [b, np, s, hn].
         """
         new_tensor_shape = tensor.size()[:-1] + \
-                           (self.num_attention_heads_per_partition,
-                            self.hidden_size_per_attention_head)
+            (self.num_attention_heads_per_partition,
+             self.hidden_size_per_attention_head)
         tensor = tensor.view(*new_tensor_shape)
         return tensor.permute(0, 2, 1, 3)
 
@@ -239,7 +268,7 @@ class ParallelSelfAttention(flow.nn.Module):
         # ql x kl x bsz x h
         # bsz x h x ql x kl
         zero_pad = flow.zeros((*x.size()[:-2], x.size(-2), 1),
-                               device=x.device, dtype=x.dtype)
+                              device=x.device, dtype=x.dtype)
         x_padded = flow.cat([zero_pad, x], dim=-1)
 
         x_padded = x_padded.view(*x.size()[:-2], x.size(-1) + 1, x.size(-2))
@@ -278,7 +307,8 @@ class ParallelSelfAttention(flow.nn.Module):
         value_layer = self._transpose_for_scores(mixed_value_layer)
         if self.relative_encoding:
             relative_layer = self.relative(position_embeddings)
-            relative_layer = self._transpose_for_scores(relative_layer)  # 1 (bsz) x n_head x klen x d_head
+            relative_layer = self._transpose_for_scores(
+                relative_layer)  # 1 (bsz) x n_head x klen x d_head
             # Raw attention scores. [b, np, qs, ks]
             rw_head_q = query_layer + r_w_bias.unsqueeze(1)
             ac_score = flow.matmul(rw_head_q, key_layer.transpose(-1, -2))
@@ -288,13 +318,14 @@ class ParallelSelfAttention(flow.nn.Module):
             # bd_score = bd_score.permute(2, 3, 0, 1) # bsz n_head qlen klen
 
             attention_scores = ac_score + bd_score
-            attention_scores = attention_scores / math.sqrt(self.hidden_size_per_attention_head)
+            attention_scores = attention_scores / \
+                math.sqrt(self.hidden_size_per_attention_head)
         else:
             if self.attention_scale > 1.0:
                 # Raw attention scores. [b, np, s, s]
                 attention_scores = flow.matmul(query_layer / math.sqrt(self.attention_scale),
-                                            key_layer.transpose(-1, -2) / math.sqrt(
-                                                self.hidden_size_per_attention_head * self.attention_scale))
+                                               key_layer.transpose(-1, -2) / math.sqrt(
+                    self.hidden_size_per_attention_head * self.attention_scale))
             else:
                 attention_scores = flow.matmul(query_layer, key_layer.transpose(-1, -2) / math.sqrt(
                     self.hidden_size_per_attention_head))
@@ -302,10 +333,11 @@ class ParallelSelfAttention(flow.nn.Module):
         # Apply the left to right attention mask.
         attention_scores = flow.mul(attention_scores, ltor_mask)
         if self.attention_scale > 1.0:
-            max_attention_scores = attention_scores.max(dim=-1, keepdim=True)[0]
+            max_attention_scores = attention_scores.max(
+                dim=-1, keepdim=True)[0]
             attention_scores -= max_attention_scores
             attention_scores *= self.attention_scale
-        # if int(os.getenv("RANK", -1)) == 0:
+        # if flow.env.get_rank() == 0:
         #     print(min_attention_scores, attention_scores.max().item())
         attention_scores = attention_scores + (-65504.0) * (1.0 - ltor_mask)
         # Attention probabilities. [b, np, s, s]
@@ -321,7 +353,7 @@ class ParallelSelfAttention(flow.nn.Module):
         # [b, s, np, hn]
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + \
-                                  (self.hidden_size_per_partition,)
+            (self.hidden_size_per_partition,)
         # [b, s, hp]
         context_layer = context_layer.view(*new_context_layer_shape)
 
@@ -336,7 +368,7 @@ class ParallelSelfAttention(flow.nn.Module):
 def gelu_impl(x):
     """OpenAI's gelu implementation."""
     return 0.5 * x * (1.0 + flow.tanh(0.7978845608028654 * x *
-                                       (1.0 + 0.044715 * x * x)))
+                                      (1.0 + 0.044715 * x * x)))
 
 
 def gelu(x):
@@ -446,7 +478,8 @@ class ParallelDecoderLayer(flow.nn.Module):
             output_layer_init_method=output_layer_init_method)
 
         # Layernorm after the self attention.
-        self.post_self_layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon)
+        self.post_self_layernorm = LayerNorm(
+            hidden_size, eps=layernorm_epsilon)
 
         self.cross_attention = ParallelCrossAttention(
             hidden_size,
@@ -458,7 +491,8 @@ class ParallelDecoderLayer(flow.nn.Module):
         )
 
         # Layernorm after the cross attention.
-        self.post_attention_layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon)
+        self.post_attention_layernorm = LayerNorm(
+            hidden_size, eps=layernorm_epsilon)
 
         # MLP
         self.mlp = ParallelMLP(
@@ -474,13 +508,15 @@ class ParallelDecoderLayer(flow.nn.Module):
         # Layer norm at the begining of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
         # Self attention.
-        self_attention_output = self.self_attention(layernorm_output, ltor_mask)
+        self_attention_output = self.self_attention(
+            layernorm_output, ltor_mask)
         # Residual connection.
         self_layernorm_input = hidden_states + self_attention_output
         # Layer norm post the self attention.
         self_layernorm_output = self.post_self_layernorm(self_layernorm_input)
         # Cross attention
-        attention_output = self.cross_attention(self_layernorm_output, encoder_states, cross_mask)
+        attention_output = self.cross_attention(
+            self_layernorm_output, encoder_states, cross_mask)
         # Residual connection
         layernorm_input = self_layernorm_input + attention_output
         # Layer norm post the cross attention
@@ -569,10 +605,11 @@ class ParallelTransformerLayer(flow.nn.Module):
 
         # Layer norm at the begining of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
-        
+
         mem = self.input_layernorm(mem) if mem is not None else None
         # Self attention.
-        attention_output = self.attention(layernorm_output, ltor_mask, position_embeddings, r_w_bias, r_r_bias, mem)
+        attention_output = self.attention(
+            layernorm_output, ltor_mask, position_embeddings, r_w_bias, r_r_bias, mem)
         # Residual connection.
         layernorm_input = hidden_states + attention_output
         # Layer norm post the self attention.
@@ -699,13 +736,18 @@ class GPT2ParallelTransformer(flow.nn.Module):
         else:
             # Position embedding (serial).
             if block_position_encoding:
-                self.position_embeddings = flow.nn.Embedding(max_sequence_length + 1, hidden_size)
-                self.block_position_embeddings = flow.nn.Embedding(max_sequence_length + 1, hidden_size)
-                flow.nn.init.normal_(self.block_position_embeddings.weight, mean=0.0, std=init_method_std)
+                self.position_embeddings = flow.nn.Embedding(
+                    max_sequence_length + 1, hidden_size)
+                self.block_position_embeddings = flow.nn.Embedding(
+                    max_sequence_length + 1, hidden_size)
+                flow.nn.init.normal_(
+                    self.block_position_embeddings.weight, mean=0.0, std=init_method_std)
             else:
-                self.position_embeddings = flow.nn.Embedding(max_sequence_length, hidden_size)
+                self.position_embeddings = flow.nn.Embedding(
+                    max_sequence_length, hidden_size)
             # Initialize the position embeddings.
-            flow.nn.init.normal_(self.position_embeddings.weight, mean=0.0, std=init_method_std)
+            flow.nn.init.normal_(
+                self.position_embeddings.weight, mean=0.0, std=init_method_std)
 
         def get_layer():
             if use_decoder_layer:
@@ -735,19 +777,23 @@ class GPT2ParallelTransformer(flow.nn.Module):
         self.layers = flow.nn.ModuleList(
             [get_layer() for _ in range(num_layers)])
 
-
         # Final layer norm before output.
         self.final_layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon)
 
-        if deepspeed.checkpointing.is_configured():
-            global get_cuda_rng_tracker, checkpoint
-            get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
-            checkpoint = deepspeed.checkpointing.checkpoint
+        self.register_buffer("ids", flow._C.arange(
+            332, dtype=flow.int64).view(1, -1))
+
+        # if deepspeed.checkpointing.is_configured():
+        #     global get_cuda_rng_tracker, checkpoint
+        #     get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
+        #     checkpoint = deepspeed.checkpointing.checkpoint
 
     def forward(self, hidden_states, position_ids, attention_mask, memory_states=None, encoder_states=None,
                 return_memory=False, detach_memory=True):
         batch_size, query_length = hidden_states.size()[:2]
-      
+        print(f"{batch_size=}, {query_length=}")
+        
+
         # print(hidden_states, position_ids, attention_mask, memory_states, encoder_states,return_memory, detach_memory)
 
         memory_length = memory_states[0].size(1) if memory_states else 0
@@ -766,45 +812,67 @@ class GPT2ParallelTransformer(flow.nn.Module):
 
             # conventional transformer
             def build_mask_matrix(seq_length, sep, memory_length=0):
-                m = hidden_states.new_ones((1, seq_length, seq_length))
+                if hidden_states.is_global:
+                    m = flow.ones(
+                        (batch_size, seq_length, seq_length),
+                        placement=hidden_states.placement,
+                        sbp=flow.sbp.split(
+                            0),
+                        dtype=hidden_states.dtype)
+                else:
+                    m = hidden_states.new_ones((1, seq_length, seq_length))
+
                 m = flow.tril(m)
                 if is_scalar:
                     m[0, :, :sep] = 1
                 else:
-                    m = m.expand(batch_size, -1, -1)
-                    ids = flow.arange(seq_length, device=sep.device, dtype=sep.dtype).view(1, -1)
+                    if not m.is_global:
+                        m = m.expand(batch_size, -1, -1)
+                        ids = flow.arange(
+                            seq_length, device=sep.device, dtype=sep.dtype).view(1, -1)
+                    else:
+                        #  self.ids = self.register_buffer("ids", flow._C.arange(332, dtype=flow.int64).view(1, -1))
+                        ids = flow.arange(seq_length,
+                                          placement=hidden_states.placement,
+                                          sbp=flow.sbp.split(0), 
+                                          dtype=sep.dtype).view(1, -1)
+                                          
                     mask = ids < sep.view(-1, 1)
                     m = m.masked_fill(mask.unsqueeze(1).expand_as(m), 1)
                 if memory_length > 0:
                     m = m.expand(batch_size, -1, -1)
-                    m = flow.cat((hidden_states.new_ones((batch_size, seq_length, memory_length)), m), dim=2)
+                    m = flow.cat((hidden_states.new_ones(
+                        (batch_size, seq_length, memory_length)), m), dim=2)
                 m = m.unsqueeze(1)
                 return m
 
             if not self.performer:
-                attention_mask = build_mask_matrix(query_length, sep, memory_length=memory_length)
+                attention_mask = build_mask_matrix(
+                    query_length, sep, memory_length=memory_length)
         else:
-            attention_mask = attention_mask[:, :, :, -query_length - memory_length:]
+            attention_mask = attention_mask[:, :,
+                                            :, -query_length - memory_length:]
 
         # False
         if self.relative_encoding:
             position_sequence = flow.arange(key_length - 1, -1, -1.0, device=hidden_states.device,
-                                             dtype=hidden_states.dtype)
+                                            dtype=hidden_states.dtype)
             position_embeddings = self.position_embeddings(position_sequence)
             # Apply dropout
             position_embeddings = self.embedding_dropout(position_embeddings)
         else:
             if self.block_position_encoding:
-                position_ids, block_position_ids = position_ids[:, 0], position_ids[:, 1]
+                position_ids, block_position_ids = position_ids[:,
+                                                                0], position_ids[:, 1]
             position_embeddings = self.position_embeddings(position_ids)
             hidden_states = hidden_states + position_embeddings
             if self.block_position_encoding:
-                block_position_embeddings = self.block_position_embeddings(block_position_ids)
+                block_position_embeddings = self.block_position_embeddings(
+                    block_position_ids)
                 hidden_states = hidden_states + block_position_embeddings
         hidden_states = self.embedding_dropout(hidden_states)
 
         # print(hidden_states)
-
 
         def check_detach(_hidden_states):
             if detach_memory:
@@ -833,11 +901,10 @@ class GPT2ParallelTransformer(flow.nn.Module):
 
             return custom_forward
 
-
         # print('=05'*50) # is down
         # print(hidden_states)
         # print(f'{self.checkpoint_activations=}')
- 
+
         if self.checkpoint_activations:
             l = 0
             num_layers = len(self.layers)
@@ -850,7 +917,7 @@ class GPT2ParallelTransformer(flow.nn.Module):
                     args += [position_embeddings, self.r_w_bias, self.r_r_bias]
                 if memory_states:
                     args += memory_states[l: l + chunk_length]
-                hidden_states =checkpoint(custom(l, l + chunk_length), *args)
+                hidden_states = checkpoint(custom(l, l + chunk_length), *args)
                 l += chunk_length
         else:
             # print(self.layers)
@@ -865,11 +932,11 @@ class GPT2ParallelTransformer(flow.nn.Module):
                 hidden_states = layer(*args, mem=mem_i)
                 if self.max_memory_length > 0 or return_memory:
                     mem_layers.append(check_detach(hidden_states))
-                
+
                 # print(hidden_states)
                 # i = 0 break up
                 # exit(0)
-        
+
         # Final layer norm.
         # print(hidden_states)
         output = self.final_layernorm(hidden_states)
@@ -878,7 +945,8 @@ class GPT2ParallelTransformer(flow.nn.Module):
         # print(output)
         # exit(0)
         if self.max_memory_length > 0 or return_memory:
-            mem_layers = self.update_mems(mem_layers, memory_states, return_memory=return_memory)
+            mem_layers = self.update_mems(
+                mem_layers, memory_states, return_memory=return_memory)
 
         return (output, mem_layers)
 
@@ -894,7 +962,8 @@ class GPT2ParallelTransformer(flow.nn.Module):
             if new_memory_length <= query_length:
                 new_mems.append(hiddens[i][:, -new_memory_length:])
             else:
-                new_mems.append(flow.cat((mems[i][:, -new_memory_length + query_length:], hiddens[i]), dim=1))
+                new_mems.append(
+                    flow.cat((mems[i][:, -new_memory_length + query_length:], hiddens[i]), dim=1))
         return new_mems
 
 
@@ -960,8 +1029,8 @@ class BertParallelSelfAttention(flow.nn.Module):
         size [b, np, s, hn].
         """
         new_tensor_shape = tensor.size()[:-1] + \
-                           (self.num_attention_heads_per_partition,
-                            self.hidden_size_per_attention_head)
+            (self.num_attention_heads_per_partition,
+             self.hidden_size_per_attention_head)
         tensor = tensor.view(*new_tensor_shape)
         return tensor.permute(0, 2, 1, 3)
 
@@ -981,7 +1050,7 @@ class BertParallelSelfAttention(flow.nn.Module):
         # Raw attention scores. [b, np, s, s]
         norm_factor = math.sqrt(math.sqrt(self.hidden_size_per_attention_head))
         attention_scores = flow.matmul(query_layer / norm_factor,
-                                        key_layer.transpose(-1, -2) / norm_factor)
+                                       key_layer.transpose(-1, -2) / norm_factor)
         # Apply the attention mask.
         attention_scores += attention_mask
 
@@ -998,7 +1067,7 @@ class BertParallelSelfAttention(flow.nn.Module):
         # [b, s, np, hn]
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + \
-                                  (self.hidden_size_per_partition,)
+            (self.hidden_size_per_partition,)
         # [b, s, hp]
         context_layer = context_layer.view(*new_context_layer_shape)
 

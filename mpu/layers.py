@@ -113,24 +113,44 @@ class VocabParallelEmbedding(flow.nn.Module):
             self.num_embeddings_per_partition, 0, init_method)
 
     def forward(self, input_):
-        # Build the mask.
-        input_mask = (input_ < self.vocab_start_index) | \
-                     (input_ >= self.vocab_end_index)
-        # Mask the input.
-        masked_input = input_.clone() - self.vocab_start_index
-        masked_input[input_mask] = 0
-        # Get the embeddings.
-        output_parallel = F.embedding(masked_input, self.weight,
-                                      self.padding_idx, self.max_norm,
-                                      self.norm_type, self.scale_grad_by_freq,
-                                      self.sparse)
-        # Mask the output embedding.
-        output_parallel[input_mask, :] = 0.0
-        # Reduce across all the model parallel GPUs.
-        # output = reduce_from_model_parallel_region(output_parallel)
         
+        masked_input = (input_ - self.vocab_start_index).to(flow.int)
+
+        if input_.is_global:
+            weight_fp16 = flow._C.amp_white_identity(self.weight) 
+        else:
+            weight_fp16 = self.weight
+
+        output_parallel = F.embedding(masked_input, 
+                                      weight_fp16,
+                                      self.padding_idx, 
+                                      self.max_norm,
+                                      None,               #self.norm_type, 暂时变为none
+                                      self.scale_grad_by_freq,
+                                      self.sparse)
+                                      
         output = output_parallel
+        
         return output
+    # def forward(self, input_):
+    #     # Build the mask.
+    #     input_mask = (input_ < self.vocab_start_index) | \
+    #                  (input_ >= self.vocab_end_index)
+    #     # Mask the input.
+    #     masked_input = input_.clone() - self.vocab_start_index
+    #     masked_input[input_mask] = 0
+    #     # Get the embeddings.
+    #     output_parallel = F.embedding(masked_input, self.weight,
+    #                                   self.padding_idx, self.max_norm,
+    #                                   self.norm_type, self.scale_grad_by_freq,
+    #                                   self.sparse)
+    #     # Mask the output embedding.
+    #     output_parallel[input_mask, :] = 0.0
+    #     # Reduce across all the model parallel GPUs.
+    #     # output = reduce_from_model_parallel_region(output_parallel)
+        
+    #     output = output_parallel
+    #     return output
 
 
 class ParallelEmbedding(flow.nn.Module):

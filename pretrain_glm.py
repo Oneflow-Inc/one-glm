@@ -24,7 +24,7 @@ import math
 import oneflow.distributed
 from filelock import FileLock
 import numpy as np
-import oneflow  as flow
+import oneflow as flow
 
 import deepspeed
 from contextlib import ExitStack
@@ -58,25 +58,29 @@ def get_masks_and_position_ids(data,
     # Attention mask (lower triangular).
     if mem_length:
         if attention_mask is None:
-            attention_mask = flow.ones((1, seq_length, seq_length + mem_length), device=data.device)
-        attention_mask = flow.tril(flow.triu(attention_mask, 1 - seq_length + mem_length), mem_length)
+            attention_mask = flow.ones(
+                (1, seq_length, seq_length + mem_length), device=data.device)
+        attention_mask = flow.tril(
+            flow.triu(attention_mask, 1 - seq_length + mem_length), mem_length)
     else:
         if reset_attention_mask:
             att_mask_batch = batch_size
         else:
             att_mask_batch = 1
         if attention_mask is None:
-            attention_mask = flow.ones((att_mask_batch, seq_length, seq_length), device=data.device)
+            attention_mask = flow.ones(
+                (att_mask_batch, seq_length, seq_length), device=data.device)
         attention_mask = flow.tril(attention_mask)
     attention_mask = attention_mask.unsqueeze(1)
 
     # Loss mask.
     if loss_mask is None:
-        loss_mask = flow.ones(data.size(), dtype=flow.float, device=data.device)
+        loss_mask = flow.ones(
+            data.size(), dtype=flow.float, device=data.device)
 
     # Position ids.
     position_ids = flow.arange(seq_length, dtype=flow.long,
-                                device=data.device)
+                               device=data.device)
     position_ids = position_ids.unsqueeze(0).expand_as(data)
     if set_loss_mask:
         loss_mask[data == eod_token] = 0.0
@@ -204,86 +208,81 @@ def get_batch(data, args):
 tokenizer = None
 
 
+def forward_step_graph(args,data,model):
+    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
+        data, args)
+    placement = flow.env.all_device_placement("cuda")
+    sbp = flow.sbp.split(0)
+    tokens = tokens.to_global(placement=placement, sbp=sbp)
+    position_ids = position_ids.to_global(placement=placement, sbp=sbp)
+    attention_mask = attention_mask.to_global(
+        placement=placement, sbp=sbp)
+    labels = labels.to_global(placement=placement, sbp=sbp)  
+    loss_mask = loss_mask.to_global(placement=placement, sbp=sbp)
+    loss = model(tokens, position_ids, attention_mask, labels, loss_mask)
+    return loss
+
+
+def forward_step_eager(args,data,model):
+    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
+        data, args)
+
+    print(f'{loss_mask.shape=}')
+    input("loss")
+    logits = model(tokens, position_ids, attention_mask)[0]
+    losses = flow._C.sparse_softmax_cross_entropy(logits, labels)
+    loss_mask = loss_mask.view((-1,))
+    loss = flow.sum(losses.view((-1,)) * loss_mask)
+    if loss_mask.sum().item() > 0:
+        loss = loss / loss_mask.sum()
+    return loss 
+
 def forward_step(data_iterator, model, args, timers, mems):
     """Forward step."""
 
     # Get the batch.
     timers('batch generator').start()
     timers('data loader').start()
-    rand = random.Random(args.iteration * mpu.get_data_parallel_world_size() + mpu.get_data_parallel_rank())
+    rand = random.Random(
+        args.iteration * mpu.get_data_parallel_world_size() + mpu.get_data_parallel_rank())
     if data_iterator[1] and rand.random() < args.multi_task_ratio:
         data = next(data_iterator[1]) if data_iterator[1] else None
         data["mode"] = "multi-task"
     else:
         data = next(data_iterator[0]) if data_iterator[0] else None
-    # print_rank_0("data iterator")
-
-    timers('data loader').stop()
-    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data, args)
-    timers('batch generator').stop()
-
-    # print_rank_0("get batch")
-
-    def print_masked_text(batch_id):
-        block_position_ids = position_ids[:, 1]
-        position_ids_ = position_ids[:, 0]
-        sep = attention_mask.item() if flow.numel(attention_mask) == 1 else attention_mask[batch_id].item()
-        text, last_segment = "", []
-        for i, token_id in enumerate(tokens[batch_id, :sep].tolist()):
-            token = tokenizer.IdToToken(token_id)
-            if token.startswith('[MASK') or token.endswith('MASK]'):
-                if last_segment:
-                    text += tokenizer.DecodeIds(last_segment)
-                    last_segment = []
-                text += f" [{position_ids_[batch_id, i].item()}, {token}]"
-            else:
-                last_segment.append(token_id)
-        if last_segment:
-            text += tokenizer.DecodeIds(last_segment)
-        print(text.encode('utf-8'))
-        last_index = None
-        for i in range(sep, tokens.size(1)):
-            if tokenizer.IdToToken(tokens[batch_id, i].item()).startswith("<|startofpiece"):
-                if last_index is not None:
-                    print(tokenizer.DecodeIds(tokens[batch_id, last_index: i].tolist()).encode('utf-8'), "|",
-                          tokenizer.DecodeIds(labels[batch_id, last_index: i].tolist()).encode('utf-8'),
-                          position_ids_[batch_id, last_index: i].tolist(),
-                          block_position_ids[batch_id, last_index:i].tolist())
-                last_index = i
-        if last_index is not None:
-            print(tokenizer.DecodeIds(tokens[batch_id, last_index:].tolist()).encode('utf-8'), "|",
-                  tokenizer.DecodeIds(labels[batch_id, last_index:].tolist()).encode('utf-8'),
-                  position_ids_[batch_id, last_index:].tolist(), block_position_ids[batch_id, last_index:].tolist())
-
-    # print(f'{(data is not None and "mode" in data)=}')
     # True
-    if data is not None and "mode" in data:
-        mode = data['mode']
-    else:
-        mode = 'bert'
+    mode = 'bert' if (data is None and "mode" in data) else data['mode']
 
-
+    if isinstance(model, flow.nn.Graph):
+        loss = forward_step_graph(args,data,model)
+    else :
+        loss = forward_step_eager(args,data,model)
+    
+    
+    with open(args.loss_txt_path,'a') as f:
+        f.write(str(loss.item())+'\n')
+    return loss, mems, mode
     logits, *mems = model(tokens, position_ids, attention_mask, *mems)
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
                                               labels)
     loss_mask = loss_mask.view(-1)
     loss = flow.sum(losses.view(-1) * loss_mask)
-    
-    
+
     # print(f'{(loss_mask.sum().item() > 0)=}')
     # True
     if loss_mask.sum().item() > 0:
         loss = loss / loss_mask.sum()
-    
+
     print(f'{loss.item()=}')
-    with open("/home/fengwen/one-glm/runs/glm_flow_fp32_loss.txt",'a') as f:
+    with open("/home/fengwen/one-glm/runs/glm_flow_fp32_loss.txt", 'a') as f:
         f.write(str(loss.item())+'\n')
     return loss, mems, mode
 
 
 def report_iteration_metrics(summary_writer, optimizer, lr, loss, elapsed_time, step, total_step, args):
     log_string = ' iteration {:8d}/{:8d} |'.format(step, total_step)
-    log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(elapsed_time)
+    log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(
+        elapsed_time)
     log_string += ' learning rate {:.3E} |'.format(lr)
     log_string += ' lm loss {:.6E} |'.format(loss)
     # if args.fp16:
@@ -319,11 +318,14 @@ def report_evaluate_metrics(summary_writer, prefix, loss, ppl, gpt_loss, bert_lo
         if gpt_loss != 0:
             summary_writer.add_scalar(f'Train/valid_gpt_loss', gpt_loss, step)
         if bert_loss != 0:
-            summary_writer.add_scalar(f'Train/valid_bert_loss', bert_loss, step)
+            summary_writer.add_scalar(
+                f'Train/valid_bert_loss', bert_loss, step)
         if sent_loss != 0:
-            summary_writer.add_scalar(f'Train/valid_sent_loss', sent_loss, step)
+            summary_writer.add_scalar(
+                f'Train/valid_sent_loss', sent_loss, step)
         if multi_loss != 0:
-            summary_writer.add_scalar(f'Train/valid_multi_loss', multi_loss, step)
+            summary_writer.add_scalar(
+                f'Train/valid_multi_loss', multi_loss, step)
 
 
 def train(model, optimizer, lr_scheduler,
@@ -332,7 +334,6 @@ def train(model, optimizer, lr_scheduler,
 
     # Turn on training mode which enables dropout.
     # model.train()
-    model.eval()
 
     # Tracking loss.
     total_lm_loss = 0.0
@@ -352,7 +353,7 @@ def train(model, optimizer, lr_scheduler,
                                                  args, timers, mems=mems, forward_step_func=forward_step)
         skipped_iters += skipped_iter
         args.iteration += 1
-
+        continue
         # Update losses.
         total_lm_loss += lm_loss.data.detach().float()
 
@@ -368,7 +369,7 @@ def train(model, optimizer, lr_scheduler,
                 report_memory('after {} iterations'.format(args.iteration))
                 report_memory_flag = False
             # for i in range(flow.distributed.get_world_size()):
-            #     if i == int(os.getenv("RANK", -1)):
+            #     if i == flow.env.get_rank():
             #         print(get_hostname())
             #         timers.log(['forward', 'backward', 'optimizer',
             #                     'batch generator', 'data loader'],
@@ -409,9 +410,11 @@ def evaluate(data_iterator, model, args, timers, forward_step_func, verbose=Fals
         while iteration < args.eval_iters:
             iteration += 1
             if verbose and iteration % args.log_interval == 0:
-                print_rank_0('Evaluating iter {}/{}'.format(iteration, args.eval_iters))
+                print_rank_0(
+                    'Evaluating iter {}/{}'.format(iteration, args.eval_iters))
             # Forward evaluation.
-            lm_loss, mems, mode = forward_step_func(data_iterator, model, args, timers, mems=mems)
+            lm_loss, mems, mode = forward_step_func(
+                data_iterator, model, args, timers, mems=mems)
 
             '''when contiguous memory optimizations are enabled, the buffers
             allocated by the optimizations are deallocated during backward pass
@@ -442,7 +445,8 @@ def evaluate(data_iterator, model, args, timers, forward_step_func, verbose=Fals
          sent_iters, multi_iters])
     flow.distributed.all_reduce(loss_data, group=mpu.get_data_parallel_group())
     loss_data = loss_data.tolist()
-    total_lm_loss = loss_data[0] / args.eval_iters / (args.world_size / args.model_parallel_size)
+    total_lm_loss = loss_data[0] / args.eval_iters / \
+        (args.world_size / args.model_parallel_size)
     total_gpt_loss = loss_data[1] / loss_data[5] if loss_data[5] > 0 else 0
     total_bert_loss = loss_data[2] / loss_data[6] if loss_data[6] > 0 else 0
     total_sent_loss = loss_data[3] / loss_data[7] if loss_data[7] > 0 else 0
@@ -457,7 +461,8 @@ def evaluate_and_print_results(prefix, data_iterator, model,
                                                                    forward_step_func=forward_step_func)
 
     lm_ppl = math.exp(min(20, lm_loss))
-    report_evaluate_metrics(summary_writer, prefix, lm_loss, lm_ppl, gpt_loss, bert_loss, sent_loss, multi_loss, step)
+    report_evaluate_metrics(summary_writer, prefix, lm_loss,
+                            lm_ppl, gpt_loss, bert_loss, sent_loss, multi_loss, step)
 
     return lm_loss
 
@@ -479,7 +484,8 @@ def evaluate_and_print_results(prefix, data_iterator, model,
 
 
 def set_deepspeed_activation_checkpointing(args):
-    deepspeed.checkpointing.configure(mpu, deepspeed_config=args.deepspeed_config, num_checkpoints=args.num_layers)
+    deepspeed.checkpointing.configure(
+        mpu, deepspeed_config=args.deepspeed_config, num_checkpoints=args.num_layers)
     mpu.checkpoint = deepspeed.checkpointing.checkpoint
     mpu.get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
     mpu.model_parallel_cuda_manual_seed = deepspeed.checkpointing.model_parallel_cuda_manual_seed
@@ -538,7 +544,8 @@ def get_train_val_test_data(args, tokenizer):
         data_config.set_defaults(data_set_type=data_set_type, transpose=False)
         train_data, val_data, test_data = data_config.apply(args, tokenizer)
 
-        data_counts = flow.cuda.LongTensor([int(args.do_train), int(args.do_valid), int(args.do_test)])
+        data_counts = flow.cuda.LongTensor(
+            [int(args.do_train), int(args.do_valid), int(args.do_test)])
     else:
         data_counts = flow.cuda.LongTensor([0, 0, 0])
 
@@ -546,7 +553,7 @@ def get_train_val_test_data(args, tokenizer):
     # flow.distributed.broadcast(data_counts,
     #                             mpu.get_model_parallel_src_rank(),
     #                             group=mpu.get_model_parallel_group())
-    
+
     args.do_train = data_counts[0].item()
     args.do_valid = data_counts[1].item()
     args.do_test = data_counts[2].item()
@@ -568,7 +575,8 @@ def main():
     if args.load and not args.new_save_directory:
         args.experiment_name = os.path.basename(os.path.normpath(args.load))
     else:
-        args.experiment_name = args.experiment_name + datetime.now().strftime("%m-%d-%H-%M")
+        args.experiment_name = args.experiment_name + \
+            datetime.now().strftime("%m-%d-%H-%M")
     if args.save:
         args.save = os.path.join(args.save, args.experiment_name)
     # Pytorch distributed.
@@ -581,17 +589,19 @@ def main():
     global tokenizer
     tokenizer = prepare_tokenizer(args)
     train_data, val_data, test_data, = get_train_val_test_data(args, tokenizer)
-    val_data, test_data = None,None
+    val_data, test_data = None, None
     multi_train_data, multi_val_data = None, None
     if args.multi_task_ratio > 0.0:
-        multi_train_data, multi_val_data = build_multi_task_dataset(args, tokenizer)
+        multi_train_data, multi_val_data = build_multi_task_dataset(
+            args, tokenizer)
 
     # Model, optimizer, and learning rate.
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
 
     if args.load is not None:
         with FileLock(os.path.join(pathlib.Path.home(), "checkpoint_lock"), timeout=-1):
-            args.iteration = load_checkpoint(model, optimizer, lr_scheduler, args, no_deepspeed=args.no_deepspeed_load)
+            args.iteration = load_checkpoint(
+                model, optimizer, lr_scheduler, args, no_deepspeed=args.no_deepspeed_load)
         if args.no_load_optim and args.fp16 and optimizer is not None:
             if args.deepspeed:
                 optimizer.refresh_fp32_params()
@@ -604,28 +614,34 @@ def main():
         lr_scheduler.switch_linear(args)
 
     summary_writer = None
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('Pretrain GPT2 model')
         args.log_dir = None
         if args.train_iters > 0:
-            args.log_dir = get_log_dir(base=args.summary_dir, name=args.experiment_name)
-            summary_writer = get_sample_writer(log_dir=args.log_dir, iteration=args.iteration)
+            args.log_dir = get_log_dir(
+                base=args.summary_dir, name=args.experiment_name)
+            summary_writer = get_sample_writer(
+                log_dir=args.log_dir, iteration=args.iteration)
         print_and_save_args(args, verbose=True, log_dir=args.log_dir)
 
     # Resume data loader if necessary.
     if args.resume_dataloader:
         print_rank_0("Resume dataloader")
         if train_data is not None:
-            train_data.batch_sampler.start_iter = args.iteration % len(train_data)
+            train_data.batch_sampler.start_iter = args.iteration % len(
+                train_data)
         if val_data is not None:
-            start_iter_val = (args.iteration // args.eval_interval) * args.eval_iters
+            start_iter_val = (args.iteration //
+                              args.eval_interval) * args.eval_iters
             val_data.batch_sampler.start_iter = start_iter_val % len(val_data)
         if multi_train_data is not None:
             multi_train_data.batch_sampler.start_iter = int(args.iteration * args.multi_task_ratio) % len(
                 multi_train_data)
         if multi_val_data is not None:
-            start_iter_val = (args.iteration // args.eval_interval) * args.eval_iters * args.multi_task_ratio
-            multi_val_data.batch_sampler.start_iter = start_iter_val % len(multi_val_data)
+            start_iter_val = (args.iteration // args.eval_interval) * \
+                args.eval_iters * args.multi_task_ratio
+            multi_val_data.batch_sampler.start_iter = start_iter_val % len(
+                multi_val_data)
     if train_data is not None:
         train_data_iterator = iter(train_data)
     else:
@@ -634,7 +650,7 @@ def main():
         multi_train_iterator = iter(multi_train_data)
     else:
         multi_train_iterator = None
-    
+
     if val_data is not None:
         val_data_iterator = iter(val_data)
     else:
@@ -652,13 +668,12 @@ def main():
             #     def save_on_exit(args_, model_, optimizer_, lr_scheduler_):
             #         save_checkpoint(args_.iteration, model_, optimizer_, lr_scheduler_, args_)
 
-                # stack.callback(save_on_exit, args, model, optimizer, lr_scheduler)
-                iteration, skipped = train(model, optimizer,
-                                           lr_scheduler,
-                                           (train_data_iterator, multi_train_iterator),
-                                           (val_data_iterator, multi_val_iterator),
-                                           timers, args, summary_writer=summary_writer)
-       
+            # stack.callback(save_on_exit, args, model, optimizer, lr_scheduler)
+            iteration, skipped = train(model, optimizer,
+                                       lr_scheduler,
+                                       (train_data_iterator, multi_train_iterator),
+                                       (val_data_iterator, multi_val_iterator),
+                                       timers, args, summary_writer=summary_writer)
 
 
 if __name__ == "__main__":

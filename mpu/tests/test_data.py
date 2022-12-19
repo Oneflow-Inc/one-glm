@@ -28,7 +28,7 @@ from commons import print_separator
 
 def test_boradcast_data(model_parallel_size):
 
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('> testing boradcast_data with model parallel size {} ...'.
               format(model_parallel_size))
 
@@ -74,7 +74,7 @@ def test_boradcast_data(model_parallel_size):
     mpu.destroy_model_parallel()
 
     flow.distributed.barrier()
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('>> passed the test :-)')
 
 

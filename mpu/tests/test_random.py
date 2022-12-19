@@ -25,7 +25,7 @@ from commons import print_separator
 
 def test_set_cuda_rng_state(model_parallel_size):
 
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('> testing set_rng_state with size {} ...'.
               format(model_parallel_size))
 
@@ -53,7 +53,7 @@ def test_set_cuda_rng_state(model_parallel_size):
     new_rng_state = flow.cuda.get_rng_state()
     max_diff = new_rng_state.sub(rng_state).max()
     print('   max diff in rng state (should be non-zero) on global rank {}: {}'.
-          format(int(os.getenv("RANK", -1)), max_diff))
+          format(flow.env.get_rank(), max_diff))
     assert max_diff > 0
 
     # Reset the rng state and do the same stuff.
@@ -68,26 +68,26 @@ def test_set_cuda_rng_state(model_parallel_size):
     # Results should be the same
     error = result_2.sub(result_1).abs().max()
     print('   max error in generated tensors (should be zero) on '
-          'global rank {}: {}'.format(int(os.getenv("RANK", -1)), error))
+          'global rank {}: {}'.format(flow.env.get_rank(), error))
     assert error < 1.0e-6
 
     # Input state should have remained intact.
     error = rng_state.sub(rng_state_copy).max()
     print('   max error in rng state (should be zero) on global rank {}: {}'.
-          format(int(os.getenv("RANK", -1)), error))
+          format(flow.env.get_rank(), error))
     assert error == 0
 
     # Reset groups
     mpu.destroy_model_parallel()
 
     flow.distributed.barrier()
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('>> passed the test :-)')
 
 
 def test_cuda_rng_tracker(model_parallel_size):
 
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('> testing cuda rng tracker with size {} ...'.
               format(model_parallel_size))
 
@@ -135,14 +135,14 @@ def test_cuda_rng_tracker(model_parallel_size):
     diff = result_11.sub(result_21).abs().max()
     diff = min(diff, result_12.sub(result_22).abs().max())
     print('   max diff in generated tensors (should be non-zero) on '
-          'global rank {}: {}'.format(int(os.getenv("RANK", -1)), diff))
+          'global rank {}: {}'.format(flow.env.get_rank(), diff))
     assert diff > 1.0e-6
     error = max(result_11.sub(target_11).abs().max(),
                 result_12.sub(target_12).abs().max())
     error = max(error, result_21.sub(target_21).abs().max())
     error = max(error, result_22.sub(target_22).abs().max())
     print('   max error in generated tensors (should be zero) on '
-          'global rank {}: {}'.format(int(os.getenv("RANK", -1)), error))
+          'global rank {}: {}'.format(flow.env.get_rank(), error))
     assert error < 1.0e-6
 
     # Reset the tracker
@@ -152,13 +152,13 @@ def test_cuda_rng_tracker(model_parallel_size):
     mpu.destroy_model_parallel()
 
     flow.distributed.barrier()
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('>> passed the test :-)')
 
 
 def test_model_parallel_cuda_manual_seed(model_parallel_size):
 
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('> testing model parallel cuda manual seed with size {} ...'.
               format(model_parallel_size))
 
@@ -178,7 +178,7 @@ def test_model_parallel_cuda_manual_seed(model_parallel_size):
     mpu.destroy_model_parallel()
 
     flow.distributed.barrier()
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('>> passed the test :-)')
 
 

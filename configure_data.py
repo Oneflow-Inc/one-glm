@@ -101,7 +101,7 @@ class DataConfig:
         self.defaults = defaults
 
     def apply(self, args, tokenizer):
-        if int(os.getenv("RANK", -1)) == 0:
+        if flow.env.get_rank() == 0:
             print('configuring data')
         self.apply_defaults(args)
         return make_loaders(args, tokenizer)
