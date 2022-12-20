@@ -296,8 +296,13 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
             weight_decay=0.0,
         )
 
-    lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000) 
-
+    # lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000) 
+    # optimizer = flow.optim.Adam(model.parameters(),
+    #                             lr=args.lr,
+    #                             weight_decay=args.weight_decay,
+    #                             betas=(args.adam_beta1, args.adam_beta2),
+    #                             eps=args.adam_eps)
+    lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000)
     if args.mode == "eager":
         return model, optimizer, lr_scheduler
     if args.mode == "graph":
@@ -365,8 +370,7 @@ def see_memory_usage(message, force=False):
 def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forward_step_func, mems=None,
                single_step=False):
     """Single training step."""
-    lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
-    return lm_loss,0,mems
+
     lm_loss_total, count = 0.0, 0
     mems = [] if mems is None else mems
     if not args.deepspeed and args.mode == 'eager':
@@ -374,9 +378,11 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
     while True:
         skipped_iter, complete = 0, False
         # Forward model for one step.
-        timers('forward').start()
+        # timers('forward').start()
         lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
-        timers('forward').stop()
+        if args.mode=='graph':
+            return lm_loss,skipped_iter, mems
+        # timers('forward').stop()
         # print_rank_0("Forward step")
         if not args.deepspeed:
             lm_loss /= args.gradient_accumulation_steps
@@ -390,12 +396,12 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
             count += 1
 
             # Calculate gradients, reduce across processes, and clip.
-            timers('backward').start()
+            # timers('backward').start()
             backward_step(optimizer, model, lm_loss, args, timers)
-            timers('backward').stop()
+            # timers('backward').stop()
             # print_rank_0("Backward step")
             # Update parameters.
-            timers('optimizer').start()
+            # timers('optimizer').start()
             if args.deepspeed:
                 if model.is_gradient_accumulation_boundary():
                     model.step()
@@ -407,7 +413,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
                 else:
                     model.step()
             else:
-                if count == args.gradient_accumulation_steps :
+                if count == args.gradient_accumulation_steps:
                     optimizer.step()
                     complete = True
                     # Update learning rate.
@@ -416,7 +422,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
                     else:
                         skipped_iter = 1
             # print_rank_0("Optimizer step")
-            timers('optimizer').stop()
+            # timers('optimizer').stop()
             if complete:
                 break
         else:

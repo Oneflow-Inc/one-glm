@@ -25,7 +25,7 @@ import oneflow.distributed
 from filelock import FileLock
 import numpy as np
 import oneflow as flow
-
+import time
 import deepspeed
 from contextlib import ExitStack
 from arguments import get_args
@@ -208,7 +208,7 @@ def get_batch(data, args):
 tokenizer = None
 
 
-def forward_step_graph(args,data,model):
+def forward_step_graph(args, data, model):
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
         data, args)
     placement = flow.env.all_device_placement("cuda")
@@ -217,13 +217,13 @@ def forward_step_graph(args,data,model):
     position_ids = position_ids.to_global(placement=placement, sbp=sbp)
     attention_mask = attention_mask.to_global(
         placement=placement, sbp=sbp)
-    labels = labels.to_global(placement=placement, sbp=sbp)  
+    labels = labels.to_global(placement=placement, sbp=sbp)
     loss_mask = loss_mask.to_global(placement=placement, sbp=sbp)
     loss = model(tokens, position_ids, attention_mask, labels, loss_mask)
     return loss
 
 
-def forward_step_eager(args,data,model):
+def forward_step_eager(args, data, model):
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
         data, args)
 
@@ -233,7 +233,8 @@ def forward_step_eager(args,data,model):
     loss = flow.sum(losses.view((-1,)) * loss_mask)
     if loss_mask.sum().item() > 0:
         loss = loss / loss_mask.sum()
-    return loss 
+    return loss
+
 
 def forward_step(data_iterator, model, args, timers, mems):
     """Forward step."""
@@ -252,15 +253,14 @@ def forward_step(data_iterator, model, args, timers, mems):
     mode = 'bert' if (data is None and "mode" in data) else data['mode']
 
     if isinstance(model, flow.nn.Graph):
-        loss = forward_step_graph(args,data,model)
-    else :
-        loss = forward_step_eager(args,data,model)
-    
-    
-    with open(args.loss_txt_path,'a') as f:
+        loss = forward_step_graph(args, data, model)
+    else:
+        loss = forward_step_eager(args, data, model)
+
+    with open(args.loss_txt_path, 'a') as f:
         f.write(str(loss.item())+'\n')
     return loss, mems, mode
-    
+
     logits, *mems = model(tokens, position_ids, attention_mask, *mems)
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
                                               labels)
@@ -327,9 +327,55 @@ def report_evaluate_metrics(summary_writer, prefix, loss, ppl, gpt_loss, bert_lo
                 f'Train/valid_multi_loss', multi_loss, step)
 
 
+def train_test_speed(train_data_iterator, model, args, optimizer, lr_scheduler,timers):
+    count = 0
+    tb = time.time()
+    t0 = time.time()
+    skipped_iters = 0
+    RANK = int(os.getenv("RANK", -1))
+    WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
+
+    timers('interval time').start()
+    report_memory_flag = True
+    mems = []
+
+    for _ in range(args.train_iters):
+        loss, skipped_iter, mems = train_step(train_data_iterator,
+                                                        model,
+                                                        optimizer,
+                                                        lr_scheduler,
+                                                        args, timers, mems=mems, forward_step_func=forward_step)
+        count += 1
+        if count % args.print_iter == 0:
+            loss.numpy()  # sync cuda
+            t1 = time.time()
+            total_batch_size = WORLD_SIZE * \
+                args.batch_size * \
+                args.print_iter
+            though_out = total_batch_size / (t1 - t0)
+            t0 = time.time()
+            if RANK == 0:
+                print(f"iter: {count}, though_out: {though_out}")
+
+    te = time.time()
+    total_batch_size = WORLD_SIZE * \
+        args.batch_size * \
+        args.train_iters
+    avg_though_out = total_batch_size / (te - tb)
+    if RANK == 0:
+        print(f"avg_though_out: {avg_though_out}, total time: {te - tb}s")
+
+    exit(0)
+
 def train(model, optimizer, lr_scheduler,
           train_data_iterator, val_data_iterator, timers, args, summary_writer=None):
     """Train the model."""
+    train_test_speed(model=model,
+                     optimizer=optimizer,
+                     lr_scheduler=lr_scheduler,
+                     train_data_iterator=train_data_iterator,
+                     args=args,
+                     timers=timers)
 
     # Turn on training mode which enables dropout.
     # model.train()
@@ -352,7 +398,7 @@ def train(model, optimizer, lr_scheduler,
                                                  args, timers, mems=mems, forward_step_func=forward_step)
         skipped_iters += skipped_iter
         args.iteration += 1
-        
+
         continue
         # Update losses.
         total_lm_loss += lm_loss.data.detach().float()

@@ -17,10 +17,11 @@
 
 import argparse
 import os
-import oneflow  as flow
+import oneflow as flow
 import deepspeed
 import json
 from utils import get_hostname
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -31,14 +32,17 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def add_model_config_args(parser):
     """Model arguments"""
-    
+
     group = parser.add_argument_group('model', 'model configuration')
     group.add_argument('--mode', type=str, default='None',
                        choices=['eager', 'graph'],
                        help='training mode')
-    group.add_argument('--transformer-xl', action='store_true', help='use transformer-xl for training')
+    group.add_argument('--transformer-xl', action='store_true',
+                       help='use transformer-xl for training')
     group.add_argument('--pretrained-bert', action='store_true',
                        help='use a pretrained bert-large-uncased model instead'
                             'of initializing from scratch. See '
@@ -127,6 +131,8 @@ def add_training_args(parser):
                        help="The experiment name for summary and checkpoint")
     group.add_argument('--batch-size', type=int, default=4,
                        help='Data Loader batch size')
+    group.add_argument('--print-iter', type=int, default=10,
+                       help='print thoughout')
     group.add_argument('--gradient-accumulation-steps', type=int, default=1,
                        help='Data Loader batch size')
     group.add_argument('--weight-decay', type=float, default=0.01,
@@ -147,7 +153,8 @@ def add_training_args(parser):
     group.add_argument('--label-smoothing', type=float, default=0.0)
     group.add_argument('--log-interval', type=int, default=100,
                        help='report interval')
-    group.add_argument('--summary-dir', type=str, default="", help="The directory to store the summary")
+    group.add_argument('--summary-dir', type=str, default="",
+                       help="The directory to store the summary")
     group.add_argument('--seed', type=int, default=1234, help='random seed')
     # Batch producer arguments
     group.add_argument('--reset-position-ids', action='store_true',
@@ -169,7 +176,8 @@ def add_training_args(parser):
     group.add_argument('--warmup', type=float, default=0.01,
                        help='percentage of data to warmup on (.01 = 1% of all '
                             'training iters). Default 0.01')
-    group.add_argument('--switch-linear', action='store_true', help="Switch to linear decay for cosine decay")
+    group.add_argument('--switch-linear', action='store_true',
+                       help="Switch to linear decay for cosine decay")
     # model checkpointing
     group.add_argument('--save', type=str, default=None,
                        help='Output directory to save checkpoints to.')
@@ -190,7 +198,8 @@ def add_training_args(parser):
                        help='Do not load rng state when loading checkpoint.')
     group.add_argument('--no-load-lr-scheduler', action='store_true',
                        help='Do not load lr scheduler when loading checkpoint.')
-    group.add_argument('--no-deepspeed-load', action='store_true', help='Not use deepspeed when loading checkpoint')
+    group.add_argument('--no-deepspeed-load', action='store_true',
+                       help='Not use deepspeed when loading checkpoint')
     group.add_argument('--finetune', action='store_true',
                        help='Load model for finetuning. Do not load optimizer '
                             'or rng state from checkpoint and set iteration to 0. '
@@ -209,8 +218,10 @@ def add_training_args(parser):
     group.add_argument('--local_rank', type=int, default=None,
                        help='local rank passed from distributed launcher')
     # BlockLM training args
-    group.add_argument('--block-lm', action='store_true', help="whether use the BlockLM pre-training")
-    group.add_argument('--masked-lm', action='store_true', help='whether to use the mlm objective')
+    group.add_argument('--block-lm', action='store_true',
+                       help="whether use the BlockLM pre-training")
+    group.add_argument('--masked-lm', action='store_true',
+                       help='whether to use the mlm objective')
     group.add_argument('--bert-prob', type=float, default=0.5)
     group.add_argument('--gpt-infill-prob', type=float, default=0.5)
     group.add_argument('--gpt-min-ratio', type=float, default=0.5)
@@ -219,8 +230,10 @@ def add_training_args(parser):
     group.add_argument('--avg-block-length', type=int, default=3)
     group.add_argument('--short-seq-prob', type=float, default=0.0)
     group.add_argument('--single-span-prob', type=float, default=0.0)
-    group.add_argument('--task-mask', action='store_true', help="Use different mask for generation and blank filling")
-    group.add_argument('--no-shuffle-block', action='store_true', help="not shuffle the blocks when filling the blank")
+    group.add_argument('--task-mask', action='store_true',
+                       help="Use different mask for generation and blank filling")
+    group.add_argument('--no-shuffle-block', action='store_true',
+                       help="not shuffle the blocks when filling the blank")
     group.add_argument('--no-block-position', action='store_true',
                        help='Use (rough) absolute positions instead of block positions')
     group.add_argument('--sentinel-token', action='store_true',
@@ -235,7 +248,8 @@ def add_training_args(parser):
 def add_evaluation_args(parser):
     """Evaluation arguments."""
 
-    group = parser.add_argument_group('validation', 'validation configurations')
+    group = parser.add_argument_group(
+        'validation', 'validation configurations')
 
     group.add_argument('--eval-batch-size', type=int, default=None,
                        help='Data Loader batch size for evaluation datasets.'
@@ -280,7 +294,7 @@ def add_data_args(parser):
     """Train/valid/test data arguments."""
 
     group = parser.add_argument_group('data', 'data configurations')
-  
+
     group.add_argument('--model-parallel-size', type=int, default=1,
                        help='size of the model parallel.')
     group.add_argument('--shuffle', action='store_true',
@@ -294,7 +308,8 @@ def add_data_args(parser):
                        help="""Filename for validation data.""")
     group.add_argument('--test-data', nargs='*', default=None,
                        help="""Filename for testing""")
-    group.add_argument('--data-dir', type=str, default=None, help="The data path to all the data files")
+    group.add_argument('--data-dir', type=str, default=None,
+                       help="The data path to all the data files")
     group.add_argument('--input-data-sizes-file', type=str, default='sizes.txt',
                        help='the filename containing all the shards sizes')
 
@@ -312,7 +327,8 @@ def add_data_args(parser):
     group.add_argument('--no-lazy-loader', action='store_true',
                        help='whether to lazy read the data set')
     group.add_argument('--half-lazy-loader', action='store_true')
-    group.add_argument('--loader-scatter', type=int, default=None, help='Number of scatters to use for dataloaders')
+    group.add_argument('--loader-scatter', type=int, default=None,
+                       help='Number of scatters to use for dataloaders')
     group.add_argument('--loose-json', action='store_true',
                        help='Use loose json (one json-formatted string per '
                             'newline), instead of tight json (data file is one '
@@ -356,13 +372,18 @@ def add_data_args(parser):
                             'Defaults to math.ceil(`--seq-length`*.15/10)*10. '
                             'MUST BE SPECIFIED IF `--use-tfrecords` is True.')
     group.add_argument('--non-sentence-start', type=float, default=0.0)
-    group.add_argument('--sample-one-document', action='store_true', help='only sample one document in one sample')
-    group.add_argument('--load-splits', type=str, default=None, help="The path to load split indices from")
-    group.add_argument('--save-splits', type=str, default=None, help="The path to save split indices to")
-    group.add_argument('--save-test-data', type=str, default=None, help="The path to save the test data")
+    group.add_argument('--sample-one-document', action='store_true',
+                       help='only sample one document in one sample')
+    group.add_argument('--load-splits', type=str, default=None,
+                       help="The path to load split indices from")
+    group.add_argument('--save-splits', type=str, default=None,
+                       help="The path to save split indices to")
+    group.add_argument('--save-test-data', type=str,
+                       default=None, help="The path to save the test data")
     group.add_argument('--multi-task-data', nargs='*', default=None,
                        help="Downstream task names for multi-task pre-training")
-    group.add_argument('--multi-task-ratio', type=float, default=0.0, help="Ratio for multi-task pre-training")
+    group.add_argument('--multi-task-ratio', type=float,
+                       default=0.0, help="Ratio for multi-task pre-training")
     group.add_argument('--multi-seq-length', type=int, default=None)
     group.add_argument('--multi-batch-size', type=int, default=None)
     return parser
@@ -373,37 +394,48 @@ def add_finetune_config_args(parser):
     group.add_argument('--loss_txt_path', type=str, default='None',
                        help='debug loss txt write path')
     group.add_argument('--task', type=str, help='Task name.')
-    group.add_argument('--load-pretrained', type=str, help="Load pretrained model", default=None)
+    group.add_argument('--load-pretrained', type=str,
+                       help="Load pretrained model", default=None)
     group.add_argument('--pool-token', type=str, choices=['start', 'pad', 'cls'],
                        help='The token to pool the sequence representation', default='cls')
-    group.add_argument('--cloze-eval', action='store_true', help='Evaluation dataset with cloze task')
-    group.add_argument('--multi-token', action='store_true', help='Use multi token for cloze evaluation')
-    group.add_argument('--segment-length', type=int, default=0, help="The maximum segment length for cloze evaluation")
+    group.add_argument('--cloze-eval', action='store_true',
+                       help='Evaluation dataset with cloze task')
+    group.add_argument('--multi-token', action='store_true',
+                       help='Use multi token for cloze evaluation')
+    group.add_argument('--segment-length', type=int, default=0,
+                       help="The maximum segment length for cloze evaluation")
     group.add_argument('--loss-func', type=str, choices=["cross_entropy", "hinge", "generative", "mix"],
                        default="cross_entropy")
     group.add_argument('--block-lm-ratio', type=float, default=0.0)
-    group.add_argument('--adapet', action='store_true', help="Use the decoupled cross entropy loss in AdaPET")
+    group.add_argument('--adapet', action='store_true',
+                       help="Use the decoupled cross entropy loss in AdaPET")
     group.add_argument('--pattern-id', type=int, default=0)
     group.add_argument('--fast-decode', action='store_true',
                        help="Fast decode for multi-token cloze. Can only be used without checkpoint activation.")
     group.add_argument('--few-superglue', action='store_true')
-    group.add_argument('--eval-valid', action='store_true', help="Whether evaluate on the valid set")
+    group.add_argument('--eval-valid', action='store_true',
+                       help="Whether evaluate on the valid set")
     group.add_argument('--validation-metric', type=str, default=None)
-    group.add_argument('--unidirectional', action='store_true', help="Use the left to right language model")
+    group.add_argument('--unidirectional', action='store_true',
+                       help="Use the left to right language model")
     group.add_argument('--src-seq-length', type=int, default=None)
     group.add_argument('--tgt-seq-length', type=int, default=None)
     group.add_argument('--adam-beta1', type=float, default=0.9)
     group.add_argument('--adam-beta2', type=float, default=0.999)
     group.add_argument('--adam-eps', type=float, default=1e-8)
-    group.add_argument('--optimizer', type=str, choices=['adam', 'adafactor'], default='adam')
+    group.add_argument('--optimizer', type=str,
+                       choices=['adam', 'adafactor'], default='adam')
     group.add_argument('--wsc-negative', action='store_true')
     group.add_argument('--overwrite', action='store_true')
     group.add_argument('--no-validation', action='store_true')
     # Continuous prompt arguments
-    group.add_argument('--continuous-prompt', action='store_true', help="Use continuous prompt for PET")
+    group.add_argument('--continuous-prompt', action='store_true',
+                       help="Use continuous prompt for PET")
     group.add_argument('--num-prompt-tokens', type=int, default=0)
-    group.add_argument('--prompt-func', default='lstm', choices=["lstm", "mlp", "none"])
-    group.add_argument('--freeze-transformer', action='store_true', default=False)
+    group.add_argument('--prompt-func', default='lstm',
+                       choices=["lstm", "mlp", "none"])
+    group.add_argument('--freeze-transformer',
+                       action='store_true', default=False)
     group.add_argument('--tune-prefix-layers', type=int, default=None)
     group.add_argument('--prefix-prompt', type=int, default=0)
     group.add_argument('--prompt-init', action='store_true', default=False)
@@ -477,9 +509,11 @@ def get_args():
         else:
             args.gradient_accumulation_steps = 1
         if "optimizer" in deepspeed_config:
-            optimizer_params_config = deepspeed_config["optimizer"].get("params", {})
+            optimizer_params_config = deepspeed_config["optimizer"].get(
+                "params", {})
             args.lr = optimizer_params_config.get("lr", args.lr)
-            args.weight_decay = optimizer_params_config.get("weight_decay", args.weight_decay)
+            args.weight_decay = optimizer_params_config.get(
+                "weight_decay", args.weight_decay)
     return args
 
 
@@ -505,12 +539,13 @@ def mpi_define_env(args):
     args.world_size = world_size
     args.rank = rank
     os.environ['MASTER_ADDR'] = master_addr
-    os.environ['MASTER_PORT'] = "29500"  # TORCH_DISTRIBUTED_DEFAULT_PORT = 29500
+    # TORCH_DISTRIBUTED_DEFAULT_PORT = 29500
+    os.environ['MASTER_PORT'] = "29500"
 
     print(
         "Discovered MPI settings of world_rank={}, local_rank={}, world_size={}, master_addr={}, master_port={}"
-            .format(os.environ['RANK'],
-                    args.local_rank,
-                    os.environ['WORLD_SIZE'],
-                    os.environ['MASTER_ADDR'],
-                    os.environ['MASTER_PORT']))
+        .format(os.environ['RANK'],
+                args.local_rank,
+                os.environ['WORLD_SIZE'],
+                os.environ['MASTER_ADDR'],
+                os.environ['MASTER_PORT']))
