@@ -791,11 +791,9 @@ class GPT2ParallelTransformer(flow.nn.Module):
     def forward(self, hidden_states, position_ids, attention_mask, memory_states=None, encoder_states=None,
                 return_memory=False, detach_memory=True):
         batch_size, query_length = hidden_states.size()[:2]
-        print(f"{batch_size=}, {query_length=}")
-        
 
         # print(hidden_states, position_ids, attention_mask, memory_states, encoder_states,return_memory, detach_memory)
-
+        
         memory_length = memory_states[0].size(1) if memory_states else 0
         key_length = query_length + memory_length
         # attention mask is the beginning postion of B region, \in [0, query_len)

@@ -227,8 +227,6 @@ def forward_step_eager(args,data,model):
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
         data, args)
 
-    print(f'{loss_mask.shape=}')
-    input("loss")
     logits = model(tokens, position_ids, attention_mask)[0]
     losses = flow._C.sparse_softmax_cross_entropy(logits, labels)
     loss_mask = loss_mask.view((-1,))
@@ -262,6 +260,7 @@ def forward_step(data_iterator, model, args, timers, mems):
     with open(args.loss_txt_path,'a') as f:
         f.write(str(loss.item())+'\n')
     return loss, mems, mode
+    
     logits, *mems = model(tokens, position_ids, attention_mask, *mems)
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
                                               labels)
@@ -353,6 +352,7 @@ def train(model, optimizer, lr_scheduler,
                                                  args, timers, mems=mems, forward_step_func=forward_step)
         skipped_iters += skipped_iter
         args.iteration += 1
+        
         continue
         # Update losses.
         total_lm_loss += lm_loss.data.detach().float()

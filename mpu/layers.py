@@ -220,7 +220,7 @@ class ColumnParallelLinear(flow.nn.Module):
         self.output_size = output_size
         self.gather_output = gather_output
         
-        world_size = int(os.getenv("WORLD_SIZE", '1'))
+        world_size = flow.env.get_world_size()
         # world_size = get_model_parallel_world_size()
 
         self.output_size_per_partition = divide(output_size, world_size)

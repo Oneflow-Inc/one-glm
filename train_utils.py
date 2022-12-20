@@ -361,19 +361,7 @@ def see_memory_usage(message, force=False):
         print(" ")
         # input("Press Any Key To Continue ..")
 
-def train_step_graph(data_iterator, model, optimizer, lr_scheduler):
-    placement = flow.env.all_device_placement("cuda")
-    sbp = flow.sbp.split(0)
-    tokens = tokens.to_global(placement=placement, sbp=sbp)
-    position_ids = position_ids.to_global(placement=placement, sbp=sbp)
-    attention_mask = attention_mask.to_global(
-        placement=placement, sbp=sbp)
-    labels = labels.to_global(placement=placement, sbp=sbp)
-    loss_mask = loss_mask.to_global(placement=placement, sbp=sbp)
-    loss = model(tokens, position_ids, attention_mask, labels, loss_mask)
 
-def train_step_eager(data_iterator, model, optimizer, lr_scheduler):
-    pass 
 def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forward_step_func, mems=None,
                single_step=False):
     """Single training step."""

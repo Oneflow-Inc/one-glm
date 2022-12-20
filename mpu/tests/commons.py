@@ -48,8 +48,8 @@ def initialize_distributed(backend='nccl'):
     local_rank = args.local_rank
 
     # Get rank and world size.
-    rank = int(os.getenv('RANK', '0'))
-    world_size = int(os.getenv("WORLD_SIZE", '1'))
+    rank = flow.env.get_rank()
+    world_size = flow.env.get_world_size()
 
     print('> initializing flow.distributed with local rank: {}, '
           'rank: {}, world size: {}'.format(local_rank, rank, world_size))
