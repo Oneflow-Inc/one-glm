@@ -64,7 +64,8 @@ def _initialize_affine_weight(weight, output_size, input_size,
     my_weight_list = weight_list[rank::world_size]
 
     with flow.no_grad():
-        flow.cat(my_weight_list, dim=partition_dim, out=weight)
+        # flow.cat(my_weight_list, dim=partition_dim,out=weight)
+        weight = flow.cat(my_weight_list, dim=partition_dim)
     if return_master_weight:
         return master_weight
     return None
