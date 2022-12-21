@@ -74,11 +74,8 @@ def check_mode(args,model):
         raise NotImplementedError
     
 def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_length=None):
-    """Build the model."""
-    assert args.mode in ["eager", "graph"]
-    print_rank_0('building GPT2 model ...')
-    # print(f'{args.pretrained_bert=}')
-    # False
+    #args.pretrained_bert : False,  model_type: multiple_choice
+    #args.pretrained_bert : False,  model_type: None
     if args.pretrained_bert:
         if model_type == "multiple_choice":
             model = BertForMultipleChoice.from_pretrained(args.tokenizer_model_type,
@@ -98,11 +95,32 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
     else:
         output_predict, paralle_output = True, True
         if (model_type == "multiple_choice" or model_type == "classification") and not args.cloze_eval:
-            output_predict = False
+            output_predict = False   # True,true
         if model_type is not None:
-            paralle_output = False
+            paralle_output = False   # False,true
         if spell_length is not None:
             print_rank_0(f"Continuous spell length {spell_length}")
+        
+        # print(args.num_layers)
+        # print(args.vocab_size)
+        # print(args.hidden_size)
+        # print(args.num_attention_heads)
+        # print(args.hidden_dropout)
+        # print(args.attention_dropout)
+        # print(args.hidden_dropout)
+        # print(args.max_position_embeddings)
+        # print(args.mem_length)
+        # print(args.checkpoint_activations)
+        # print(args.checkpoint_num_layers)
+        # print(paralle_output)
+        # print(args.transformer_xl)
+        # print(args.block_lm and not args.masked_lm)
+        # print(output_predict)
+        # print(spell_length)
+        # print(args.prompt_func)
+        # print(args.attention_scale)
+        # exit(0)
+
         model = GLMModel(num_layers=args.num_layers,
                          vocab_size=args.vocab_size,
                          hidden_size=args.hidden_size,
@@ -121,57 +139,13 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
                          spell_length=spell_length,
                          spell_func=args.prompt_func,
                          attention_scale=args.attention_scale)
+        #False
         if args.freeze_transformer:
             model.freeze_transformer(tune_prefix_layers=args.tune_prefix_layers)
-        if model_type is not None:
-            if model_type == 'multiple_choice':
-                if args.cloze_eval:
-                    if multi_token:
-                        if args.fast_decode:
-                            model = GLMForMultiTokenClozeFast(model, length_penalty=args.length_penalty)
-                        else:
-                            model = GLMForMultiTokenCloze(model, length_penalty=args.length_penalty)
-                    else:
-                        model = GLMForSingleTokenCloze(model, take_softmax=args.adapet)
-                else:
-                    model = GLMForSequenceClassification(model, args.hidden_size, args.output_dropout, args.pool_token,
-                                                         num_class=num_labels)
-            elif model_type == 'classification':
-                model = GLMForSequenceClassification(model, args.hidden_size, args.output_dropout, args.pool_token,
-                                                     num_class=num_labels)
-            elif model_type == 'generation':
-                pass
-            else:
-                raise NotImplementedError(model_type)
-
-    print(f'{(mpu.get_data_parallel_rank() == 0)=}')
-    # True
-    if mpu.get_data_parallel_rank() == 0:
-        print(' > number of parameters on model parallel rank {}: {}'.format(
-            mpu.get_model_parallel_rank(),
-            sum([p.nelement() for p in model.parameters()])), flush=True)
-
-    # To prevent OOM for model sizes that cannot fit in GPU memory in full precision
-    if args.fp16:
-        model.half()
-
-    # GPU allocation.
-    model.cuda(flow.cuda.current_device())
-
-    # Fp16 conversion.
-    if args.fp16:
-        model = FP16_Module(model)
-
-    # Wrap model for distributed training.
-    # if not args.deepspeed and (args.train_iters or args.epochs):
-    #     if args.DDP_impl == 'torch':
-    #         i = flow.cuda.current_device()
-    #         model = TorchDDP(model, device_ids=[i], output_device=i,
-    #                          process_group=mpu.get_data_parallel_group())
-    #     elif args.DDP_impl == 'local':
-    #         model = LocalDDP(model)
-    #     else:
-    #         print_rank_0("Skip DDP model")
+        #model_type:multiple_choice
+        #model_type:none
+        
+    model.cuda()
     return model
 
 
@@ -276,8 +250,7 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
 
     model = get_model(args, model_type=model_type, multi_token=multi_token, num_labels=num_labels,
                       spell_length=spell_length)
-    
-    
+
     if args.debug_loss:
         # load pretrain
         load_torch_model(model, path=args.debug_pretrain_model)
@@ -285,7 +258,6 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
         model.eval()
     else:
         model.train()
-    print(f"/home/fengwen/datasets/mo.pt  is load"*100)
     
     check_mode(args,model)
 

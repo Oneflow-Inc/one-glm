@@ -226,15 +226,13 @@ def forward_step_graph(args,data,model):
 def forward_step_eager(args,data,model):
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
         data, args)
-
-    print(f'{loss_mask.shape=}')
-    input("loss")
     logits = model(tokens, position_ids, attention_mask)[0]
     losses = flow._C.sparse_softmax_cross_entropy(logits, labels)
     loss_mask = loss_mask.view((-1,))
     loss = flow.sum(losses.view((-1,)) * loss_mask)
     if loss_mask.sum().item() > 0:
         loss = loss / loss_mask.sum()
+    print(loss)
     return loss 
 
 def forward_step(data_iterator, model, args, timers, mems):
@@ -259,8 +257,8 @@ def forward_step(data_iterator, model, args, timers, mems):
         loss = forward_step_eager(args,data,model)
     
     
-    with open(args.loss_txt_path,'a') as f:
-        f.write(str(loss.item())+'\n')
+    # with open(args.loss_txt_path,'a') as f:
+    #     f.write(str(loss.item())+'\n')
     return loss, mems, mode
     logits, *mems = model(tokens, position_ids, attention_mask, *mems)
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
