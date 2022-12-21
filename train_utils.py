@@ -144,8 +144,7 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
             model.freeze_transformer(tune_prefix_layers=args.tune_prefix_layers)
         #model_type:multiple_choice
         #model_type:none
-        
-    model.cuda()
+
     return model
 
 
