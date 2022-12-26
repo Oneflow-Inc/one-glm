@@ -220,7 +220,10 @@ class ParallelSelfAttention(flow.nn.Module):
         if output_layer_init_method is None:
             output_layer_init_method = init_method
         # Per attention head and per partition values.
-        world_size = get_model_parallel_world_size()
+        # TODO(world_size set 1)
+        # world_size = get_model_parallel_world_size()
+        world_size = 1 
+        
         self.hidden_size_per_partition = divide(hidden_size, world_size)
         self.hidden_size_per_attention_head = divide(hidden_size,
                                                      num_attention_heads)
@@ -248,10 +251,7 @@ class ParallelSelfAttention(flow.nn.Module):
                                        init_method=output_layer_init_method)
         self.output_dropout = flow.nn.Dropout(output_dropout_prob)
 
-        if deepspeed.checkpointing.is_configured():
-            global get_cuda_rng_tracker, checkpoint
-            get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
-            checkpoint = deepspeed.checkpointing.checkpoint
+       
 
     def _transpose_for_scores(self, tensor):
         """Transpose a 3D tensor [b, s, np*hn] into a 4D tensor with
@@ -776,17 +776,9 @@ class GPT2ParallelTransformer(flow.nn.Module):
         # Transformer layers.
         self.layers = flow.nn.ModuleList(
             [get_layer() for _ in range(num_layers)])
-
         # Final layer norm before output.
         self.final_layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon)
 
-        self.register_buffer("ids", flow._C.arange(
-            332, dtype=flow.int64).view(1, -1))
-
-        # if deepspeed.checkpointing.is_configured():
-        #     global get_cuda_rng_tracker, checkpoint
-        #     get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
-        #     checkpoint = deepspeed.checkpointing.checkpoint
 
     def forward(self, hidden_states, position_ids, attention_mask, memory_states=None, encoder_states=None,
                 return_memory=False, detach_memory=True):

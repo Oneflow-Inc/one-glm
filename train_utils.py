@@ -8,8 +8,8 @@ from oneflow.nn.parallel import DistributedDataParallel as ddp
 # from fp16 import FP16_Module, FP16_Optimizer, DynamicLossScaler
 from fp16.loss_scaler import DynamicLossScaler
 from learning_rates import AnnealingLR
-from model import GLMModel, glm_get_params_for_weight_decay_optimization
-from model import GLMForMultiTokenCloze, GLMForMultiTokenClozeFast, GLMForSingleTokenCloze, GLMForSequenceClassification
+from model import GLMModel
+# from model import GLMForMultiTokenCloze, GLMForMultiTokenClozeFast, GLMForSingleTokenCloze, GLMForSequenceClassification
 # from model import PyTorchDistributedDataParallel as TorchDDP, DistributedDataParallel as LocalDDP
 from model.modeling_bert import BertForMultipleChoice, BertForSequenceClassification
 from utils import print_rank_0, get_checkpoint_name, get_checkpoint_iteration
@@ -175,11 +175,11 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
     return model
 
 
-def get_optimizer_param_groups(model):
+# def get_optimizer_param_groups(model):
     # Build parameter groups (weight decay and non-decay).
     # while isinstance(model, (LocalDDP, TorchDDP, FP16_Module)):
     #     model = model.module
-    param_groups = glm_get_params_for_weight_decay_optimization(model)
+    # param_groups = glm_get_params_for_weight_decay_optimization(model)
 
     # Add model parallel attribute if it is not set.
     # True

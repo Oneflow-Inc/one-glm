@@ -423,9 +423,9 @@ def get_args():
     parser = add_finetune_config_args(parser)
 
     # Include DeepSpeed configuration arguments
-    parser = deepspeed.add_config_arguments(parser)
 
     args = parser.parse_args()
+    # False
     if not args.train_data and not args.data_dir:
         print('WARNING: No training data specified')
 
@@ -433,84 +433,26 @@ def get_args():
 
     args.rank = int(os.getenv('RANK', '0'))
     args.world_size = int(os.getenv("WORLD_SIZE", '1'))
-    if hasattr(args, 'deepspeed_mpi') and args.deepspeed_mpi:
-        mpi_define_env(args)
-    elif os.getenv('OMPI_COMM_WORLD_LOCAL_RANK'):
-        # We are using (OpenMPI) mpirun for launching distributed data parallel processes
-        local_rank = int(os.getenv('OMPI_COMM_WORLD_LOCAL_RANK'))
-        local_size = int(os.getenv('OMPI_COMM_WORLD_LOCAL_SIZE'))
-
-        # Possibly running with Slurm
-        num_nodes = int(os.getenv('SLURM_JOB_NUM_NODES', '1'))
-        nodeid = int(os.getenv('SLURM_NODEID', '0'))
-
-        args.local_rank = local_rank
-        args.rank = nodeid * local_size + local_rank
-        args.world_size = num_nodes * local_size
 
     args.model_parallel_size = min(args.model_parallel_size, args.world_size)
+
+    # True
     if args.rank == 0:
         print('using world size: {} and model-parallel size: {} '.format(
             args.world_size, args.model_parallel_size))
 
     args.dynamic_loss_scale = False
+    # True
     if args.loss_scale is None:
         args.dynamic_loss_scale = True
+        # True
         if args.rank == 0:
             print(' > using dynamic loss scaling')
 
-    # The args fp32_* or fp16_* meant to be active when the
-    # args fp16 is set. So the default behaviour should all
-    # be false.
+    # False
     if not args.fp16:
         args.fp32_embedding = False
         args.fp32_tokentypes = False
         args.fp32_layernorm = False
 
-    if hasattr(args, "deepspeed") and args.deepspeed and args.deepspeed_config is not None:
-        with open(args.deepspeed_config) as file:
-            deepspeed_config = json.load(file)
-        if "train_micro_batch_size_per_gpu" in deepspeed_config:
-            args.batch_size = deepspeed_config["train_micro_batch_size_per_gpu"]
-        if "gradient_accumulation_steps" in deepspeed_config:
-            args.gradient_accumulation_steps = deepspeed_config["gradient_accumulation_steps"]
-        else:
-            args.gradient_accumulation_steps = 1
-        if "optimizer" in deepspeed_config:
-            optimizer_params_config = deepspeed_config["optimizer"].get("params", {})
-            args.lr = optimizer_params_config.get("lr", args.lr)
-            args.weight_decay = optimizer_params_config.get("weight_decay", args.weight_decay)
     return args
-
-
-def mpi_define_env(args):
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    world_size = comm.Get_size()
-
-    master_addr = None
-    if rank == 0:
-        master_addr = get_hostname()
-    master_addr = comm.bcast(master_addr, root=0)
-
-    # Determine local rank by assuming hostnames are unique
-    proc_name = MPI.Get_processor_name()
-    all_procs = comm.allgather(proc_name)
-    local_rank = sum([i == proc_name for i in all_procs[:rank]])
-
-    os.environ['RANK'] = str(rank)
-    os.environ['WORLD_SIZE'] = str(world_size)
-    args.local_rank = local_rank
-    args.world_size = world_size
-    args.rank = rank
-    os.environ['MASTER_ADDR'] = master_addr
-    os.environ['MASTER_PORT'] = "29500"  # TORCH_DISTRIBUTED_DEFAULT_PORT = 29500
-
-    print(
-        "Discovered MPI settings of world_rank={}, local_rank={}, world_size={}, master_addr={}, master_port={}"
-            .format(os.environ['RANK'],
-                    args.local_rank,
-                    os.environ['WORLD_SIZE'],
-                    os.environ['MASTER_ADDR'],
-                    os.environ['MASTER_PORT']))

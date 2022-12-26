@@ -43,31 +43,45 @@ def _initialize_affine_weight(weight, output_size, input_size,
     Build the master weight on all processes and scatter
     the relevant chunk."""
     # If we only use 1 process for model parallelism, bypass scatter.
-    world_size = get_model_parallel_world_size()
-    if world_size == 1:
-        init_method(weight)
-        if return_master_weight:
-            return weight
-        return None
-
-    # Initialize master weight
-    master_weight = flow.empty(output_size, input_size,
-                                dtype=weight.dtype,
-                                requires_grad=False)
-    init_method(master_weight)
-
-    # Split and copy
-    per_partition_per_stride_size = divide(per_partition_size, stride)
-    weight_list = flow.split(master_weight, per_partition_per_stride_size,
-                              dim=partition_dim)
-    rank = get_model_parallel_rank()
-    my_weight_list = weight_list[rank::world_size]
-
-    with flow.no_grad():
-        flow.cat(my_weight_list, dim=partition_dim, out=weight)
+    world_size = 1
+    init_method(weight)
     if return_master_weight:
-        return master_weight
+        return weight
     return None
+
+# def _initialize_affine_weight(weight, output_size, input_size,
+#                               per_partition_size, partition_dim, init_method,
+#                               stride=1, return_master_weight=False):
+#     """Initialize affine weight for model parallel.
+
+#     Build the master weight on all processes and scatter
+#     the relevant chunk."""
+#     # If we only use 1 process for model parallelism, bypass scatter.
+#     world_size = get_model_parallel_world_size()
+#     if world_size == 1:
+#         init_method(weight)
+#         if return_master_weight:
+#             return weight
+#         return None
+
+#     # Initialize master weight
+#     master_weight = flow.empty(output_size, input_size,
+#                                 dtype=weight.dtype,
+#                                 requires_grad=False)
+#     init_method(master_weight)
+
+#     # Split and copy
+#     per_partition_per_stride_size = divide(per_partition_size, stride)
+#     weight_list = flow.split(master_weight, per_partition_per_stride_size,
+#                               dim=partition_dim)
+#     rank = get_model_parallel_rank()
+#     my_weight_list = weight_list[rank::world_size]
+
+#     with flow.no_grad():
+#         weight = flow.cat(my_weight_list, dim=partition_dim)
+#     if return_master_weight:
+#         return master_weight
+#     return None
 
 
 class VocabParallelEmbedding(flow.nn.Module):
@@ -351,10 +365,9 @@ class RowParallelLinear(flow.nn.Module):
         self.weight = Parameter(flow.Tensor(self.output_size,
                                              self.input_size_per_partition))
         # self.weight.model_parallel = True
-
         if bias:
             self.bias = Parameter(flow.Tensor(self.output_size))
-        else:
+        else:   
             self.register_parameter('bias', None)
         self.master_weight = _initialize_affine_weight(
             self.weight, self.output_size, self.input_size,
