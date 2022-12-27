@@ -47,8 +47,9 @@ class _VocabParallelCrossEntropy(flow.autograd.Function):
         # Get the partition's vocab indecies
         get_vocab_range = VocabUtility.vocab_range_from_per_partition_vocab_size
         partition_vocab_size = vocab_parallel_logits.size()[-1]
-        rank = get_model_parallel_rank()
-        world_size = get_model_parallel_world_size()
+        # rank = get_model_parallel_rank()
+        # world_size = get_model_parallel_world_size()
+        world_size,rank = 1,0
         vocab_start_index, vocab_end_index = get_vocab_range(
             partition_vocab_size, rank, world_size)
 

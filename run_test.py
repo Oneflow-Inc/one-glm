@@ -1,4 +1,5 @@
 import time
+from utils import Timers
 from configure_data import prepare_tokenizer
 import oneflow as flow
 import oneflow.nn as nn
@@ -7,8 +8,9 @@ from arguments import get_args
 from model import GLMModel
 import sys
 import mpu
-from pretrain_glm import get_train_val_test_data
-sys.path.append(".") 
+from pretrain_glm import get_train_val_test_data, train
+sys.path.append(".")
+
 
 def load_torch_model(model, path):
     import torch
@@ -37,7 +39,7 @@ def get_model(args):
         checkpoint_activations=args.checkpoint_activations,
         checkpoint_num_layers=args.checkpoint_num_layers,
         parallel_output=True,
-    relative_encoding=args.transformer_xl,
+        relative_encoding=args.transformer_xl,
         block_position_encoding=args.block_lm and not args.masked_lm,
         output_predict=True,
         spell_length=None,
@@ -80,14 +82,21 @@ def get_model(args):
     else:
         raise NotImplementedError
 
+
 def get_train_dataloader(args):
     tokenizer = prepare_tokenizer(args)
     train_data, val_data, test_data, = get_train_val_test_data(args, tokenizer)
     train_data_iterator = iter(train_data)
     return train_data_iterator
 
-if __name__ =="__main__":
+
+if __name__ == "__main__":
     args = get_args()
     model, optimizer, lr_scheduler = get_model(args)
     train_data_iterator = get_train_dataloader(args)
-    
+    timers = Timers()
+    train(model, optimizer,
+          lr_scheduler,
+          (train_data_iterator, None),
+          (None, None),
+          timers, args, summary_writer=None)

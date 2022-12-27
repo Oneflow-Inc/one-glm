@@ -82,12 +82,12 @@ def print_and_save_args(args, verbose=True, log_dir=None):
         json_file = os.path.join(log_dir, "config.json")
         with open(json_file, "w") as output:
             json.dump(vars(args), output, sort_keys=True)
-        if args.deepspeed and args.deepspeed_config is not None:
-            with open(args.deepspeed_config) as file:
-                deepspeed_config = json.load(file)
-            deepspeed_json_file = os.path.join(log_dir, "config_gpt_large.json")
-            with open(deepspeed_json_file, "w") as output:
-                json.dump(deepspeed_config, output)
+        # if args.deepspeed and args.deepspeed_config is not None:
+        #     with open(args.deepspeed_config) as file:
+        #         deepspeed_config = json.load(file)
+        #     deepspeed_json_file = os.path.join(log_dir, "config_gpt_large.json")
+        #     with open(deepspeed_json_file, "w") as output:
+        #         json.dump(deepspeed_config, output)
 
 
 def print_params_min_max_norm(optimizer, iteration):

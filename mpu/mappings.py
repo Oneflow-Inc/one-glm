@@ -45,7 +45,7 @@ def _split(input_):
         return input_
 
     # Split along last dimension.
-    world_size = flow.distributed.get_world_size(group=group)
+    world_size = 1 # flow.distributed.get_world_size(group=group)
     input_list = split_tensor_along_last_dim(input_, world_size)
 
     # Note: flow.split does not create contiguous tensors by default.
@@ -66,7 +66,7 @@ def _gather(input_):
     # Size and dimension.
     last_dim = input_.dim() - 1
     rank = flow.distributed.get_rank(group=group)
-    world_size = flow.distributed.get_world_size(group=group)
+    world_size = 1 # flow.distributed.get_world_size(group=group)
 
     tensor_list = [flow.empty_like(input_) for _ in range(world_size)]
     tensor_list[rank] = input_

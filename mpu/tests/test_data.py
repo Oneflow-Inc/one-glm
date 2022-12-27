@@ -81,7 +81,7 @@ def test_boradcast_data(model_parallel_size):
 if __name__ == '__main__':
 
     initialize_distributed()
-    world_size = flow.distributed.get_world_size()
+    world_size = 1 # flow.distributed.get_world_size()
 
     model_parallel_size = 1
     while model_parallel_size <= world_size:

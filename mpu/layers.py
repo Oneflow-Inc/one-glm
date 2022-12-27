@@ -192,7 +192,7 @@ class ParallelEmbedding(flow.nn.Module):
         self.sparse = False
         self._weight = None
         # Divide the weight matrix along the embedding dimension.
-        world_size = get_model_parallel_world_size()
+        world_size = 1 # get_model_parallel_world_size()
         self.embedding_dim_per_partition = divide(self.embedding_dim,
                                                   world_size)
 
@@ -234,7 +234,7 @@ class ColumnParallelLinear(flow.nn.Module):
         self.output_size = output_size
         self.gather_output = gather_output
         
-        world_size = int(os.getenv("WORLD_SIZE", '1'))
+        world_size = 1 # int(os.getenv("WORLD_SIZE", '1'))
         # world_size = get_model_parallel_world_size()
 
         self.output_size_per_partition = divide(output_size, world_size)

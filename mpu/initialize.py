@@ -54,10 +54,10 @@ def initialize_model_parallel(model_parallel_size_):
     #         model_parallel_size_))
     # # Get world size and rank. Ensure some consistencies.
     # assert flow.distributed.is_initialized()
-    world_size = int(os.getenv("WORLD_SIZE", 1)) # flow.distributed.get_world_size()
+    world_size = 1 # int(os.getenv("WORLD_SIZE", 1)) # flow.distributed.get_world_size()
     model_parallel_size = min(model_parallel_size_, world_size)
     ensure_divisibility(world_size, model_parallel_size)
-    rank = flow.env.get_rank()
+    rank = 0 # flow.env.get_rank()
 
     # Build the data parallel groups.
     # global _DATA_PARALLEL_GROUP

@@ -94,7 +94,7 @@ class ParallelCrossAttention(flow.nn.Module):
         if output_layer_init_method is None:
             output_layer_init_method = init_method
         # Per attention head and per partition values.
-        world_size = get_model_parallel_world_size()
+        world_size = 1 # get_model_parallel_world_size()
         self.hidden_size_per_partition = divide(hidden_size, world_size)
         self.hidden_size_per_attention_head = divide(hidden_size,
                                                      num_attention_heads)
@@ -718,7 +718,7 @@ class GPT2ParallelTransformer(flow.nn.Module):
             # Relative position embedding
             self.position_embeddings = PositionalEmbedding(hidden_size)
             # Per attention head and per partition values.
-            world_size = get_model_parallel_world_size()
+            world_size = 1 # get_model_parallel_world_size()
             self.hidden_size_per_attention_head = divide(hidden_size,
                                                          num_attention_heads)
             self.num_attention_heads_per_partition = divide(num_attention_heads,
@@ -995,7 +995,7 @@ class BertParallelSelfAttention(flow.nn.Module):
         self.dropout_prob = dropout_prob
         self.output_parallel = output_parallel
         # Per attention head and per partition values.
-        world_size = get_model_parallel_world_size()
+        world_size = 1# get_model_parallel_world_size()
         self.hidden_size_per_partition = divide(hidden_size, world_size)
         self.hidden_size_per_attention_head = divide(hidden_size,
                                                      num_attention_heads)

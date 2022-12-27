@@ -243,13 +243,13 @@ def forward_step(data_iterator, model, args, timers, mems):
     # Get the batch.
     timers('batch generator').start()
     timers('data loader').start()
-    rand = random.Random(
-        args.iteration * mpu.get_data_parallel_world_size() + mpu.get_data_parallel_rank())
-    if data_iterator[1] and rand.random() < args.multi_task_ratio:
-        data = next(data_iterator[1]) if data_iterator[1] else None
-        data["mode"] = "multi-task"
-    else:
-        data = next(data_iterator[0]) if data_iterator[0] else None
+    # rand = random.Random(
+    #     args.iteration * mpu.get_data_parallel_world_size() + mpu.get_data_parallel_rank())
+    # if data_iterator[1] and rand.random() < args.multi_task_ratio:
+    #     data = next(data_iterator[1]) if data_iterator[1] else None
+    #     data["mode"] = "multi-task"
+    # else:
+    data = next(data_iterator[0]) if data_iterator[0] else None
     # True
     mode = 'bert' if (data is None and "mode" in data) else data['mode']
 
@@ -344,7 +344,7 @@ def train(model, optimizer, lr_scheduler,
     timers('interval time').start()
     report_memory_flag = True
     mems = []
-    while args.iteration < args.train_iters:
+    for _ in range( args.train_iters):
 
         lm_loss, skipped_iter, mems = train_step(train_data_iterator,
                                                  model,
@@ -533,21 +533,21 @@ def get_train_val_test_data(args, tokenizer):
 
     (train_data, val_data, test_data) = (None, None, None)
     # Data loader only on rank 0 of each model parallel group.
-    if mpu.get_model_parallel_rank() == 0:
-        data_config = configure_data()
-        if args.block_lm:
-            data_set_type = "Block"
-        elif args.transformer_xl:
-            data_set_type = "GPT-XL"
-        else:
-            data_set_type = "GPT2"
-        data_config.set_defaults(data_set_type=data_set_type, transpose=False)
-        train_data, val_data, test_data = data_config.apply(args, tokenizer)
-
-        data_counts = flow.cuda.LongTensor(
-            [int(args.do_train), int(args.do_valid), int(args.do_test)])
+    # if mpu.get_model_parallel_rank() == 0:
+    data_config = configure_data()
+    if args.block_lm:
+        data_set_type = "Block"
+    elif args.transformer_xl:
+        data_set_type = "GPT-XL"
     else:
-        data_counts = flow.cuda.LongTensor([0, 0, 0])
+        data_set_type = "GPT2"
+    data_config.set_defaults(data_set_type=data_set_type, transpose=False)
+    train_data, val_data, test_data = data_config.apply(args, tokenizer)
+
+    data_counts = flow.cuda.LongTensor(
+        [int(args.do_train), int(args.do_valid), int(args.do_test)])
+    # else:
+    #     data_counts = flow.cuda.LongTensor([0, 0, 0])
 
     # # Broadcast num tokens.
     # flow.distributed.broadcast(data_counts,
