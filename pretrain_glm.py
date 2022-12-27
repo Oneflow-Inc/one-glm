@@ -25,7 +25,7 @@ import oneflow.distributed
 from filelock import FileLock
 import numpy as np
 import oneflow as flow
-
+import time
 import deepspeed
 from contextlib import ExitStack
 from arguments import get_args
@@ -255,7 +255,6 @@ def forward_step(data_iterator, model, args, timers, mems):
     else :
         loss = forward_step_eager(args,data,model)
     
-    input(f"{loss.item()=}")
     with open(args.loss_txt_path,'a') as f:
         f.write(str(loss.item())+'\n')
     return loss, mems, mode
@@ -324,11 +323,64 @@ def report_evaluate_metrics(summary_writer, prefix, loss, ppl, gpt_loss, bert_lo
             summary_writer.add_scalar(
                 f'Train/valid_multi_loss', multi_loss, step)
 
+def train_test_speed(train_data_iterator, model, args, optimizer, lr_scheduler,timers):
+    count = 0
+    LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
+    RANK = int(os.getenv("RANK", -1))
+    WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
+    # warmup 10
+    for _ in range(10):
+        loss, skipped_iter, mems = train_step(train_data_iterator,
+                                                        model,
+                                                        optimizer,
+                                                        lr_scheduler,
+                                                        args, timers, mems=[], forward_step_func=forward_step)
+   
+    tb = time.time()
+    t0 = time.time()
+    skipped_iters = 0
+
+    timers('interval time').start()
+    report_memory_flag = True
+    mems = []
+    for _ in range(args.train_iters):
+        loss, skipped_iter, mems = train_step(train_data_iterator,
+                                                        model,
+                                                        optimizer,
+                                                        lr_scheduler,
+                                                        args, timers, mems=mems, forward_step_func=forward_step)
+        count += 1
+        if count % args.print_iter == 0:
+            # loss.numpy()  # sync cuda
+            t1 = time.time()
+            total_batch_size = WORLD_SIZE * \
+                args.batch_size * \
+                args.print_iter
+            though_out = total_batch_size / (t1 - t0)
+            t0 = time.time()
+            if RANK == 0:
+                print(f"iter: {count}, though_out: {though_out}")
+
+    te = time.time()
+    total_batch_size =  WORLD_SIZE * \
+        args.batch_size * \
+        args.train_iters
+    avg_though_out = total_batch_size / (te - tb)
+    if RANK == 0:
+        print(f"avg_though_out: {avg_though_out}, total time: {te - tb}s")
+    
+    exit(0)
 
 def train(model, optimizer, lr_scheduler,
           train_data_iterator, val_data_iterator, timers, args, summary_writer=None):
     """Train the model."""
-
+    train_test_speed(model=model,
+                     optimizer=optimizer,
+                     lr_scheduler=lr_scheduler,
+                     train_data_iterator=train_data_iterator,
+                     args=args,
+                     timers=timers)
+    
     # Turn on training mode which enables dropout.
     # model.train()
 
@@ -586,7 +638,6 @@ def main():
     multi_train_data, multi_val_data = None, None
 
 
-    print('=00'*50)
     # Model, optimizer, and learning rate.
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
    
@@ -606,7 +657,7 @@ def main():
     multi_train_iterator = None     
     val_data_iterator = None
     multi_val_iterator = None
-
+    
     # TODO: figure out how to properly set this especially when resuming training
     iteration = 0
     if args.train_iters > 0:

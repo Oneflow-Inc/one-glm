@@ -377,8 +377,6 @@ def train_step_eager(data_iterator, model, optimizer, lr_scheduler):
 def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forward_step_func, mems=None,
                single_step=False):
     """Single training step."""
-    lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
-    return lm_loss,0,mems
     lm_loss_total, count = 0.0, 0
     mems = [] if mems is None else mems
     if not args.deepspeed and args.mode == 'eager':
@@ -386,9 +384,9 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
     while True:
         skipped_iter, complete = 0, False
         # Forward model for one step.
-        timers('forward').start()
+        # timers('forward').start()
         lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
-        timers('forward').stop()
+        # timers('forward').stop()
         # print_rank_0("Forward step")
         if not args.deepspeed:
             lm_loss /= args.gradient_accumulation_steps
@@ -402,12 +400,12 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
             count += 1
 
             # Calculate gradients, reduce across processes, and clip.
-            timers('backward').start()
+            # timers('backward').start()
             backward_step(optimizer, model, lm_loss, args, timers)
-            timers('backward').stop()
+            # timers('backward').stop()
             # print_rank_0("Backward step")
             # Update parameters.
-            timers('optimizer').start()
+            # timers('optimizer').start()
             if args.deepspeed:
                 if model.is_gradient_accumulation_boundary():
                     model.step()
@@ -428,7 +426,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
                     else:
                         skipped_iter = 1
             # print_rank_0("Optimizer step")
-            timers('optimizer').stop()
+            # timers('optimizer').stop()
             if complete:
                 break
         else:

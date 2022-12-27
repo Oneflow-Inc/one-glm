@@ -454,5 +454,6 @@ def get_args():
         args.fp32_embedding = False
         args.fp32_tokentypes = False
         args.fp32_layernorm = False
-
+    args.deepspeed=False
+    args.print_iter=10
     return args
