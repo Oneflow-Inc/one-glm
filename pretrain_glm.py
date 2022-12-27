@@ -238,8 +238,8 @@ def forward_step(data_iterator, model, args, timers, mems):
     """Forward step."""
 
     # Get the batch.
-    timers('batch generator').start()
-    timers('data loader').start()
+    # timers('batch generator').start()
+    # timers('data loader').start()
     # rand = random.Random(
     #     args.iteration * mpu.get_data_parallel_world_size() + mpu.get_data_parallel_rank())
     # if data_iterator[1] and rand.random() < args.multi_task_ratio:

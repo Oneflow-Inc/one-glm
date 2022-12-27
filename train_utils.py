@@ -289,13 +289,17 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
     
     check_mode(args,model)
 
-    optimizer = flow.optim.SGD(
-            model.parameters(),
-            lr=args.lr,
-            momentum=0.9,
-            weight_decay=0.0,
-        )
-
+    # optimizer = flow.optim.SGD(
+    #         model.parameters(),
+    #         lr=args.lr,
+    #         momentum=0.9,
+    #         weight_decay=0.0,
+    #     )
+    optimizer = flow.optim.Adam(model.parameters(),
+                                lr=args.lr,
+                                weight_decay=args.weight_decay,
+                                betas=(args.adam_beta1, args.adam_beta2),
+                                eps=args.adam_eps)
     lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000) 
 
     if args.mode == "eager":
@@ -372,11 +376,26 @@ def train_step_graph(data_iterator, model, optimizer, lr_scheduler):
     loss_mask = loss_mask.to_global(placement=placement, sbp=sbp)
     loss = model(tokens, position_ids, attention_mask, labels, loss_mask)
 
-def train_step_eager(data_iterator, model, optimizer, lr_scheduler):
-    pass 
+
+
+
 def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forward_step_func, mems=None,
                single_step=False):
     """Single training step."""
+    mems = [] if mems is None else mems
+    if args.mode == 'eager':
+        optimizer.zero_grad()
+        loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+        loss.backward()
+        optimizer.step()
+        lr_scheduler.step()
+        return loss,0,mems
+    elif args.mode=="graph":
+        loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+        return loss,0,mems
+    else:
+        raise ImportError
+
     lm_loss_total, count = 0.0, 0
     mems = [] if mems is None else mems
     if not args.deepspeed and args.mode == 'eager':
@@ -386,6 +405,10 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
         # Forward model for one step.
         # timers('forward').start()
         lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+
+        if args.mode=='graph':
+            return lm_loss,skipped_iter,mems
+            
         # timers('forward').stop()
         # print_rank_0("Forward step")
         if not args.deepspeed:

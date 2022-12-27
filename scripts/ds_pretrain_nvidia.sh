@@ -15,7 +15,7 @@ HOST_FILE_PATH="/workspace/hostfile"
 mkdir -p logs
 # run_cmd="${OPTIONS_NCCL} deepspeed --master_port ${MASTER_PORT} --num_nodes ${NUM_WORKERS} --num_gpus ${NUM_GPUS_PER_WORKER} --hostfile ${HOST_FILE_PATH} pretrain_glm.py ${gpt_options} 2>&1 | tee logs/log-${DATESTR}.txt"
 
-_DEVICE_NUM_PER_NODE=2
+_DEVICE_NUM_PER_NODE=4
 _MASTER_ADDR=127.0.0.1
 _NUM_NODES=1
 _NODE_RANK=0
