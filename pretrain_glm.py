@@ -238,14 +238,6 @@ def forward_step(data_iterator, model, args, timers, mems):
     """Forward step."""
 
     # Get the batch.
-    # timers('batch generator').start()
-    # timers('data loader').start()
-    # rand = random.Random(
-    #     args.iteration * mpu.get_data_parallel_world_size() + mpu.get_data_parallel_rank())
-    # if data_iterator[1] and rand.random() < args.multi_task_ratio:
-    #     data = next(data_iterator[1]) if data_iterator[1] else None
-    #     data["mode"] = "multi-task"
-    # else:
     data = next(data_iterator[0]) if data_iterator[0] else None
     # True
     mode = 'bert' if (data is None and "mode" in data) else data['mode']
@@ -258,21 +250,7 @@ def forward_step(data_iterator, model, args, timers, mems):
     with open(args.loss_txt_path,'a') as f:
         f.write(str(loss.item())+'\n')
     return loss, mems, mode
-    logits, *mems = model(tokens, position_ids, attention_mask, *mems)
-    losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
-                                              labels)
-    loss_mask = loss_mask.view(-1)
-    loss = flow.sum(losses.view(-1) * loss_mask)
-
-    # print(f'{(loss_mask.sum().item() > 0)=}')
-    # True
-    if loss_mask.sum().item() > 0:
-        loss = loss / loss_mask.sum()
-
-    print(f'{loss.item()=}')
-    with open("/home/fengwen/one-glm/runs/glm_flow_fp32_loss.txt", 'a') as f:
-        f.write(str(loss.item())+'\n')
-    return loss, mems, mode
+   
 
 
 def report_iteration_metrics(summary_writer, optimizer, lr, loss, elapsed_time, step, total_step, args):
