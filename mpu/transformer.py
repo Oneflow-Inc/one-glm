@@ -71,7 +71,7 @@ class PositionalEmbedding(flow.nn.Module):
         self.hidden_size = hidden_size
 
         inv_freq = 1 / \
-            (10000 ** (flow.arange(0.0, hidden_size, 2.0) / hidden_size))
+            (10000 ** (flow._C.arange(0.0, hidden_size, 2.0) / hidden_size))
         self.register_buffer('inv_freq', inv_freq)
 
     def forward(self, pos_seq, bsz=None):
@@ -376,51 +376,103 @@ def gelu(x):
 
 
 class ParallelMLP(flow.nn.Module):
-    """MLP for GPT2.
-
-    MLP will take the input with h hidden state, project it to 4*h
-    hidden dimension, perform gelu transformation, and project the
-    state back into h hidden dimension. At the end, dropout is also
-    applied.
-
-    Arguments:
-        hidden_size: The hidden size of the self attention.
-        output_dropout_prob: dropout probability for the outputs
-                             after self attention and final output.
-        init_method: initialization method used for the weights. Note
-                     that all biases are initialized to zero and
-                     layernorm weight are initialized to one.
-        output_layer_init_method: output layer initialization. If None,
-                                  use `init_method`.
-    """
-
+    
     def __init__(self, hidden_size, output_dropout_prob, init_method,
                  output_layer_init_method=None):
         super(ParallelMLP, self).__init__()
-        # Set output layer initialization if not provided.
+     
         if output_layer_init_method is None:
             output_layer_init_method = init_method
-        # Project to 4h.
+       
+        # self.dense_h_to_4h = ColumnParallelLinear(hidden_size, 4 * hidden_size,
+        #                                           gather_output=False,
+        #                                           init_method=init_method)
+
         self.dense_h_to_4h = ColumnParallelLinear(hidden_size, 4 * hidden_size,
                                                   gather_output=False,
-                                                  init_method=init_method)
-        # Project back to h.
+                                                  init_method=init_method, 
+                                                  if_use_gelu=True)
+
+        # self.dense_4h_to_h = RowParallelLinear(
+            # 4 * hidden_size,
+            # hidden_size,
+            # input_is_parallel=True,
+            # init_method=output_layer_init_method)
+        # self.dropout = flow.nn.Dropout(output_dropout_prob)
+
         self.dense_4h_to_h = RowParallelLinear(
             4 * hidden_size,
             hidden_size,
             input_is_parallel=True,
-            init_method=output_layer_init_method)
-        self.dropout = flow.nn.Dropout(output_dropout_prob)
+            init_method=output_layer_init_method, 
+            if_use_dropout=True, 
+            dropout_rate=output_dropout_prob)
 
     def forward(self, hidden_states):
-        # [b, s, 4hp]
+        # previous
+        # intermediate_parallel = self.dense_h_to_4h(hidden_states)
+        # intermediate_parallel = gelu(intermediate_parallel)
+        
+        # Fused bias add and Gelu
         intermediate_parallel = self.dense_h_to_4h(hidden_states)
-        intermediate_parallel = gelu(intermediate_parallel)
 
-        # [b, s, h]
+
+        # previous
+        # output = self.dense_4h_to_h(intermediate_parallel)
+        # output = self.dropout(output)
+        
+        # Fused bias add and Dropout
         output = self.dense_4h_to_h(intermediate_parallel)
-        output = self.dropout(output)
+
         return output
+
+        
+# class ParallelMLP(flow.nn.Module):
+#     """MLP for GPT2.
+
+#     MLP will take the input with h hidden state, project it to 4*h
+#     hidden dimension, perform gelu transformation, and project the
+#     state back into h hidden dimension. At the end, dropout is also
+#     applied.
+
+#     Arguments:
+#         hidden_size: The hidden size of the self attention.
+#         output_dropout_prob: dropout probability for the outputs
+#                              after self attention and final output.
+#         init_method: initialization method used for the weights. Note
+#                      that all biases are initialized to zero and
+#                      layernorm weight are initialized to one.
+#         output_layer_init_method: output layer initialization. If None,
+#                                   use `init_method`.
+#     """
+
+#     def __init__(self, hidden_size, output_dropout_prob, init_method,
+#                  output_layer_init_method=None):
+#         super(ParallelMLP, self).__init__()
+#         # Set output layer initialization if not provided.
+#         if output_layer_init_method is None:
+#             output_layer_init_method = init_method
+#         # Project to 4h.
+#         self.dense_h_to_4h = ColumnParallelLinear(hidden_size, 4 * hidden_size,
+#                                                   gather_output=False,
+#                                                   init_method=init_method)
+#         # Project back to h.
+#         self.dense_4h_to_h = RowParallelLinear(
+#             4 * hidden_size,
+#             hidden_size,
+#             input_is_parallel=True,
+#             init_method=output_layer_init_method)
+#         self.dropout = flow.nn.Dropout(output_dropout_prob)
+
+#     def forward(self, hidden_states):
+#         # [b, s, 4hp]
+#         intermediate_parallel = self.dense_h_to_4h(hidden_states)
+#         intermediate_parallel = gelu(intermediate_parallel)
+
+#         # [b, s, h]
+#         output = self.dense_4h_to_h(intermediate_parallel)
+#         output = self.dropout(output)
+#         return output
 
 
 class ParallelDecoderLayer(flow.nn.Module):
