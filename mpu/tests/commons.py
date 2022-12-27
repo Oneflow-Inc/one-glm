@@ -48,8 +48,9 @@ def initialize_distributed(backend='nccl'):
     local_rank = args.local_rank
 
     # Get rank and world size.
-    rank = int(os.getenv('RANK', '0'))
-    world_size = int(os.getenv("WORLD_SIZE", '1'))
+    # rank = int(os.getenv('RANK', '0'))
+    # world_size = int(os.getenv("WORLD_SIZE", '1'))
+    world_size,rank = 1,0
 
     print('> initializing flow.distributed with local rank: {}, '
           'rank: {}, world size: {}'.format(local_rank, rank, world_size))
@@ -77,6 +78,6 @@ def print_separator(message):
     filler_len = (78 - len(message)) // 2
     filler = '-' * filler_len
     string = '\n' + filler + ' {} '.format(message) + filler
-    if flow.distributed.get_rank() == 0:
+    if flow.env.get_rank() == 0:
         print(string, flush=True)
     flow.distributed.barrier()

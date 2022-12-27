@@ -13,16 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os 
+"""Model and data parallel groups."""
+import oneflow  as flow
+import os
+from .utils import ensure_divisibility
 
 LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv("RANK", -1))
 WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
 
-"""Model and data parallel groups."""
-
-import oneflow  as flow
-import os
-from .utils import ensure_divisibility
 
 
 # Model parallel group that the current rank belongs to.
@@ -50,15 +49,15 @@ def initialize_model_parallel(model_parallel_size_):
     with a total of 16 GPUs, rank 0 to 7 belong to the first box and
     ranks 8 to 15 belong to the second box.
     """
-    # if flow.distributed.get_rank() == 0:
+    # if flow.env.get_rank() == 0:
     #     print('> initializing model parallel with size {}'.format(
     #         model_parallel_size_))
     # # Get world size and rank. Ensure some consistencies.
     # assert flow.distributed.is_initialized()
-    world_size = int(os.getenv("WORLD_SIZE", 1)) # flow.distributed.get_world_size()
+    world_size = 1 # int(os.getenv("WORLD_SIZE", 1)) # flow.distributed.get_world_size()
     model_parallel_size = min(model_parallel_size_, world_size)
     ensure_divisibility(world_size, model_parallel_size)
-    rank = int(os.getenv("RANK", -1))
+    rank = 0 # flow.env.get_rank()
 
     # Build the data parallel groups.
     # global _DATA_PARALLEL_GROUP
@@ -89,11 +88,11 @@ def model_parallel_is_initialized():
     return True
 
 
-def get_model_parallel_group():
-    """Get the model parallel group the caller rank belongs to."""
-    assert _MODEL_PARALLEL_GROUP is not None, \
-        'model parallel group is not initialized'
-    return _MODEL_PARALLEL_GROUP
+# def get_model_parallel_group():
+#     """Get the model parallel group the caller rank belongs to."""
+#     assert _MODEL_PARALLEL_GROUP is not None, \
+#         'model parallel group is not initialized'
+#     return _MODEL_PARALLEL_GROUP
 
 
 def get_data_parallel_group():
@@ -105,27 +104,27 @@ def get_data_parallel_group():
 
 def get_model_parallel_world_size():
     """Return world size for the model parallel group."""
-    return WORLD_SIZE
+    return 1
     # return flow.distributed.get_world_size(group=get_model_parallel_group())
 
 
 def get_model_parallel_rank():
     """Return my rank for the model parallel group."""
-    return RANK
+    return 0
     # return flow.distributed.get_rank(group=get_model_parallel_group())
 
 
 def get_model_parallel_src_rank():
     """Calculate the global rank corresponding to a local rank zeor
     in the model parallel group."""
-    global_rank = int(os.getenv("RANK", -1))
+    global_rank = flow.env.get_rank()
     local_world_size = get_model_parallel_world_size()
     return (global_rank // local_world_size) * local_world_size
 
 
 def get_data_parallel_world_size():
     """Return world size for the data parallel group."""
-    return WORLD_SIZE
+    return 1
     return flow.distributed.get_world_size(group=get_data_parallel_group())
 
 

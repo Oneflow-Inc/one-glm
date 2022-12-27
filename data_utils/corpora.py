@@ -481,11 +481,14 @@ class Stories(PromptReader):
 
 
 class BertBaseData(BertData):
-    PATH = '/root/data/formatted_one_article_per_line'
+    # PATH = '/root/data/formatted_one_article_per_line'
+    PATH = '/home/fengwen/datasets/other/dataset/glm_train.txt'
 
 
 class BertLargeData(BertData):
-    PATH = '/dataset/c07bd62b/cognitive/zhengxiao/formatted_one_article_per_line_large'
+    # PATH = '/dataset/c07bd62b/cognitive/zhengxiao/formatted_one_article_per_line_large'
+    PATH = '/home/fengwen/datasets/other/dataset/glm_train.txt'
+    print(f"load {PATH=}")
 
 
 class WuDaoCorpus(PromptReader):

@@ -43,7 +43,7 @@ def get_sample_writer(log_dir, iteration=0):
 
 def print_rank_0(message):
     # if flow.distributed.is_initialized():
-    #     if flow.distributed.get_rank() == 0:
+    #     if flow.env.get_rank() == 0:
     #         print(message, flush=True)
     # else:
     print(message, flush=True)
@@ -57,7 +57,7 @@ def get_hostname():
 
 
 def get_spare_port(args):
-    if flow.distributed.get_rank() == 0:
+    if flow.env.get_rank() == 0:
         port = subprocess.check_output(["shuf -n 1 -i 10000-65535"], shell=True)
         port = int(port.strip())
         if port == args.master_port:
@@ -82,18 +82,18 @@ def print_and_save_args(args, verbose=True, log_dir=None):
         json_file = os.path.join(log_dir, "config.json")
         with open(json_file, "w") as output:
             json.dump(vars(args), output, sort_keys=True)
-        if args.deepspeed and args.deepspeed_config is not None:
-            with open(args.deepspeed_config) as file:
-                deepspeed_config = json.load(file)
-            deepspeed_json_file = os.path.join(log_dir, "config_gpt_large.json")
-            with open(deepspeed_json_file, "w") as output:
-                json.dump(deepspeed_config, output)
+        # if args.deepspeed and args.deepspeed_config is not None:
+        #     with open(args.deepspeed_config) as file:
+        #         deepspeed_config = json.load(file)
+        #     deepspeed_json_file = os.path.join(log_dir, "config_gpt_large.json")
+        #     with open(deepspeed_json_file, "w") as output:
+        #         json.dump(deepspeed_config, output)
 
 
 def print_params_min_max_norm(optimizer, iteration):
     """Print min, max, and norm of all parameters."""
     index = 0
-    rank = flow.distributed.get_rank()
+    rank = flow.env.get_rank()
     string = 'iteration, rank, index, model-parallel,min, max, norm\n'
     optimizer_ = optimizer
     # if isinstance(optimizer, FP16_Optimizer):
@@ -124,10 +124,11 @@ class Timers:
 
         def start(self):
             """Start the timer."""
-            assert not self.started_, 'timer has already been started'
-            flow.cuda.synchronize()
-            self.start_time = time.time()
-            self.started_ = True
+            # assert not self.started_, 'timer has already been started'
+            # flow.cuda.synchronize()
+            # self.start_time = time.time()
+            # self.started_ = True
+            pass
 
         def stop(self):
             """Stop the timer."""
@@ -181,13 +182,14 @@ def report_memory(name):
 
     mega_bytes = 1024.0 * 1024.0
     string = name + ' memory (MB)'
-    string += ' | allocated: {}'.format(
-        flow.cuda.memory_allocated() / mega_bytes)
-    string += ' | max allocated: {}'.format(
-        flow.cuda.max_memory_allocated() / mega_bytes)
-    string += ' | cached: {}'.format(flow.cuda.memory_cached() / mega_bytes)
-    string += ' | max cached: {}'.format(
-        flow.cuda.memory_reserved() / mega_bytes)
+    string += ' | allocated: {}'.format('None')
+        # flow.cuda.memory_allocated() / mega_bytes)
+    string += ' | max allocated: {}'.format('None')
+        # flow.cuda.max_memory_allocated() / mega_bytes)
+    # string += ' | cached: {}'.format(flow.cuda.memory_cached() / mega_bytes)
+    string += ' | cached: {}'.format('None')
+    string += ' | max cached: {}'.format('None')
+        # flow.cuda.memory_reserved() / mega_bytes)
     print_rank_0(string)
 
 
@@ -234,7 +236,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler, args, tag=None, b
         if mpu.get_data_parallel_rank() == 0:
             checkpoint_name = get_checkpoint_name(args.save, tag)
             print('global rank {} is saving checkpoint at iteration {:7d} to {}'.
-                  format(flow.distributed.get_rank(), iteration, checkpoint_name))
+                  format(flow.env.get_rank(), iteration, checkpoint_name))
             sd = {'iteration': iteration}
             if args.deepspeed:
                 model = model.module
@@ -269,7 +271,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler, args, tag=None, b
     if barrier:
         flow.distributed.barrier()
     # And update the latest iteration
-    if flow.distributed.get_rank() == 0:
+    if flow.env.get_rank() == 0:
         tracker_filename = get_checkpoint_tracker_filename(args.save)
         with open(tracker_filename, 'w') as f:
             f.write(tag)
@@ -352,7 +354,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, args, no_deepspeed=False, no
 
         if mpu.get_data_parallel_rank() == 0:
             print('global rank {} is loading checkpoint {}'.format(
-                flow.distributed.get_rank(), checkpoint_name))
+                flow.env.get_rank(), checkpoint_name))
 
         # Load the checkpoint.
         sd = flow.load(checkpoint_name, map_location='cpu')

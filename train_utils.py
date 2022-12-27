@@ -1,18 +1,15 @@
+import mpu
 import deepspeed
 import oneflow  as flow
 # from apex.optimizers import FusedAdam as Adam
 from oneflow.optim import Adam 
-
 from oneflow import distributed as dist
-
-import mpu
+from oneflow.nn.parallel import DistributedDataParallel as ddp
 # from fp16 import FP16_Module, FP16_Optimizer, DynamicLossScaler
 from fp16.loss_scaler import DynamicLossScaler
-
 from learning_rates import AnnealingLR
-
-from model import GLMModel, glm_get_params_for_weight_decay_optimization
-from model import GLMForMultiTokenCloze, GLMForMultiTokenClozeFast, GLMForSingleTokenCloze, GLMForSequenceClassification
+from model import GLMModel
+# from model import GLMForMultiTokenCloze, GLMForMultiTokenClozeFast, GLMForSingleTokenCloze, GLMForSequenceClassification
 # from model import PyTorchDistributedDataParallel as TorchDDP, DistributedDataParallel as LocalDDP
 from model.modeling_bert import BertForMultipleChoice, BertForSequenceClassification
 from utils import print_rank_0, get_checkpoint_name, get_checkpoint_iteration
@@ -23,7 +20,7 @@ def load_pretrained(model, checkpoint_path, args, task_tokens=None):
     checkpoint_name = get_checkpoint_name(load_dir, tag, release)
     if mpu.get_data_parallel_rank() == 0:
         print('global rank {} is loading pretrained model {}'.format(
-            flow.distributed.get_rank(), checkpoint_name))
+            flow.env.get_rank(), checkpoint_name))
     # Load the checkpoint.
     sd = flow.load(checkpoint_name, map_location='cpu')
     if args.deepspeed:
@@ -63,10 +60,25 @@ def load_pretrained(model, checkpoint_path, args, task_tokens=None):
     if args.continuous_prompt and args.prompt_init:
         model.prompt_spell.init_embedding(model.word_embeddings.weight.data, task_tokens)
 
-
+def check_mode(args,model):
+    if args.mode == "graph":
+        placement = flow.env.all_device_placement("cuda")
+        model = model.to_global(placement=placement,
+                                    sbp=flow.sbp.broadcast
+                                    )
+    elif args.mode == "eager":
+        model.cuda()
+        if flow.env.get_world_size() > 1:
+            model = ddp(model)
+    else:
+        raise NotImplementedError
+    
 def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_length=None):
     """Build the model."""
+    assert args.mode in ["eager", "graph"]
     print_rank_0('building GPT2 model ...')
+    # print(f'{args.pretrained_bert=}')
+    # False
     if args.pretrained_bert:
         if model_type == "multiple_choice":
             model = BertForMultipleChoice.from_pretrained(args.tokenizer_model_type,
@@ -132,6 +144,8 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
             else:
                 raise NotImplementedError(model_type)
 
+    print(f'{(mpu.get_data_parallel_rank() == 0)=}')
+    # True
     if mpu.get_data_parallel_rank() == 0:
         print(' > number of parameters on model parallel rank {}: {}'.format(
             mpu.get_model_parallel_rank(),
@@ -149,23 +163,23 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
         model = FP16_Module(model)
 
     # Wrap model for distributed training.
-    if not args.deepspeed and (args.train_iters or args.epochs):
-        if args.DDP_impl == 'torch':
-            i = flow.cuda.current_device()
-            model = TorchDDP(model, device_ids=[i], output_device=i,
-                             process_group=mpu.get_data_parallel_group())
-        elif args.DDP_impl == 'local':
-            model = LocalDDP(model)
-        else:
-            print_rank_0("Skip DDP model")
+    # if not args.deepspeed and (args.train_iters or args.epochs):
+    #     if args.DDP_impl == 'torch':
+    #         i = flow.cuda.current_device()
+    #         model = TorchDDP(model, device_ids=[i], output_device=i,
+    #                          process_group=mpu.get_data_parallel_group())
+    #     elif args.DDP_impl == 'local':
+    #         model = LocalDDP(model)
+    #     else:
+    #         print_rank_0("Skip DDP model")
     return model
 
 
-def get_optimizer_param_groups(model):
+# def get_optimizer_param_groups(model):
     # Build parameter groups (weight decay and non-decay).
     # while isinstance(model, (LocalDDP, TorchDDP, FP16_Module)):
     #     model = model.module
-    param_groups = glm_get_params_for_weight_decay_optimization(model)
+    # param_groups = glm_get_params_for_weight_decay_optimization(model)
 
     # Add model parallel attribute if it is not set.
     # True
@@ -246,31 +260,55 @@ def get_learning_rate_scheduler(optimizer, args):
     return lr_scheduler
 
 
+def load_torch_model(model, path):
+    import torch
+    torch_params = torch.load(path, map_location='cpu')
+
+    flow_params = {}
+    for k,v in torch_params.items():
+        flow_params[k] = flow.Tensor(
+            v.numpy().astype("float32"))
+    model.load_state_dict(flow_params, strict=False)
+    print("load pretraining model succeed!")
+
 def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_labels=None, spell_length=None):
     """Setup model and optimizer."""
 
     model = get_model(args, model_type=model_type, multi_token=multi_token, num_labels=num_labels,
                       spell_length=spell_length)
-    param_groups = get_optimizer_param_groups(model)
-
-    if args.train_data is not None or args.data_dir is not None and (args.epochs > 0 or args.train_iters > 0):
-        if args.deepspeed:
-            print_rank_0("DeepSpeed is enabled.")
-
-            model, optimizer, _, _ = deepspeed.initialize(
-                model=model,
-                model_parameters=param_groups,
-                args=args,
-                mpu=mpu,
-                dist_init_required=False
-            )
-        else:
-            optimizer = get_optimizer(param_groups, args)
-        lr_scheduler = get_learning_rate_scheduler(optimizer, args)
+    
+    
+    if args.debug_loss:
+        # load pretrain
+        load_torch_model(model, path=args.debug_pretrain_model)
+        # load_torch_model(model,"/home/fengwen/datasets/mo.pt")    
+        model.eval()
     else:
-        optimizer, lr_scheduler = None, None
+        model.train()
+    print(f"/home/fengwen/datasets/mo.pt  is load!!")
+    
+    check_mode(args,model)
 
-    return model, optimizer, lr_scheduler
+    # optimizer = flow.optim.SGD(
+    #         model.parameters(),
+    #         lr=args.lr,
+    #         momentum=0.9,
+    #         weight_decay=0.0,
+    #     )
+    optimizer = flow.optim.Adam(model.parameters(),
+                                lr=args.lr,
+                                weight_decay=args.weight_decay,
+                                betas=(args.adam_beta1, args.adam_beta2),
+                                eps=args.adam_eps)
+    lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000) 
+
+    if args.mode == "eager":
+        return model, optimizer, lr_scheduler
+    if args.mode == "graph":
+        graph_model = mpu.GLMGraph(args, model, optimizer, lr_scheduler)
+        return graph_model, None, None
+    else:
+        raise NotImplementedError
 
 
 def backward_step(optimizer, model, lm_loss, args, timers):
@@ -280,15 +318,16 @@ def backward_step(optimizer, model, lm_loss, args, timers):
     loss = lm_loss
 
     # Backward pass.
-    if args.deepspeed:
-        model.backward(loss)
-    else:
-        # optimizer.zero_grad()
-        if args.fp16:
-            optimizer.backward(loss, update_master_grads=False)
-        else:
-            loss.backward()
-
+    # if args.deepspeed:
+    #     model.backward(loss)
+    # else:
+    #     # optimizer.zero_grad()
+    #     if args.fp16:
+    #         optimizer.backward(loss, update_master_grads=False)
+    #     else:
+    #         loss.backward()
+    if args.mode == 'eager':
+        loss.backward()
     if args.deepspeed or args.DDP_impl == 'torch':
         # DeepSpeed backward propagation already addressed all reduce communication.
         # Reset the timer to avoid breaking timer logs below.
@@ -304,8 +343,8 @@ def backward_step(optimizer, model, lm_loss, args, timers):
             optimizer.update_master_grads()
 
         # Clipping gradients helps prevent the exploding gradient.
-        if args.clip_grad > 0:
-            if not args.fp16:
+        if args.clip_grad > 0 and args.mode == 'eager':
+            if not args.fp16 :
                 mpu.clip_grad_norm(model.parameters(), args.clip_grad)
             else:
                 optimizer.clip_master_grads(args.clip_grad)
@@ -326,26 +365,57 @@ def see_memory_usage(message, force=False):
         print(" ")
         # input("Press Any Key To Continue ..")
 
+def train_step_graph(data_iterator, model, optimizer, lr_scheduler):
+    placement = flow.env.all_device_placement("cuda")
+    sbp = flow.sbp.split(0)
+    tokens = tokens.to_global(placement=placement, sbp=sbp)
+    position_ids = position_ids.to_global(placement=placement, sbp=sbp)
+    attention_mask = attention_mask.to_global(
+        placement=placement, sbp=sbp)
+    labels = labels.to_global(placement=placement, sbp=sbp)
+    loss_mask = loss_mask.to_global(placement=placement, sbp=sbp)
+    loss = model(tokens, position_ids, attention_mask, labels, loss_mask)
+
+
+
 
 def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forward_step_func, mems=None,
                single_step=False):
     """Single training step."""
+    mems = [] if mems is None else mems
+    if args.mode == 'eager':
+        optimizer.zero_grad()
+        loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+        loss.backward()
+        optimizer.step()
+        lr_scheduler.step()
+        return loss,0,mems
+    elif args.mode=="graph":
+        loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+        return loss,0,mems
+    else:
+        raise ImportError
+
     lm_loss_total, count = 0.0, 0
     mems = [] if mems is None else mems
-    if not args.deepspeed:
+    if not args.deepspeed and args.mode == 'eager':
         optimizer.zero_grad()
     while True:
         skipped_iter, complete = 0, False
         # Forward model for one step.
-        timers('forward').start()
+        # timers('forward').start()
         lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
-        timers('forward').stop()
+
+        if args.mode=='graph':
+            return lm_loss,skipped_iter,mems
+            
+        # timers('forward').stop()
         # print_rank_0("Forward step")
         if not args.deepspeed:
             lm_loss /= args.gradient_accumulation_steps
 
         reduced_loss = lm_loss.detach().clone().view(1)
-        flow.distributed.all_reduce(reduced_loss.data, group=mpu.get_data_parallel_group())
+        # flow.distributed.all_reduce(reduced_loss.data, group=mpu.get_data_parallel_group())
         reduced_loss.data = reduced_loss.data / (args.world_size / args.model_parallel_size)
 
         if not DynamicLossScaler._has_inf_or_nan(reduced_loss):
@@ -353,12 +423,12 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
             count += 1
 
             # Calculate gradients, reduce across processes, and clip.
-            timers('backward').start()
+            # timers('backward').start()
             backward_step(optimizer, model, lm_loss, args, timers)
-            timers('backward').stop()
+            # timers('backward').stop()
             # print_rank_0("Backward step")
             # Update parameters.
-            timers('optimizer').start()
+            # timers('optimizer').start()
             if args.deepspeed:
                 if model.is_gradient_accumulation_boundary():
                     model.step()
@@ -370,7 +440,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
                 else:
                     model.step()
             else:
-                if count == args.gradient_accumulation_steps:
+                if count == args.gradient_accumulation_steps :
                     optimizer.step()
                     complete = True
                     # Update learning rate.
@@ -379,7 +449,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
                     else:
                         skipped_iter = 1
             # print_rank_0("Optimizer step")
-            timers('optimizer').stop()
+            # timers('optimizer').stop()
             if complete:
                 break
         else:
@@ -388,6 +458,6 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
             mems = []
         if single_step:
             break
-    if args.deepspeed:
-        lm_loss_total = lm_loss_total / count
+    # if args.deepspeed:
+    #     lm_loss_total = lm_loss_total / count
     return lm_loss_total, skipped_iter, mems

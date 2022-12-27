@@ -15,7 +15,7 @@
 
 import oneflow  as flow
 
-from .initialize import get_model_parallel_group
+# # from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_src_rank
 
@@ -47,8 +47,8 @@ def _build_key_size_numel_dictionaries(keys, data):
 
     # Move to GPU and broadcast.
     sizes_cuda = flow.cuda.LongTensor(sizes)
-    flow.distributed.broadcast(sizes_cuda, get_model_parallel_src_rank(),
-                                group=get_model_parallel_group())
+    # flow.distributed.broadcast(sizes_cuda, get_model_parallel_src_rank(),
+    #                             group=get_model_parallel_group())
 
     # Move back to cpu and unpack.
     sizes_cpu = sizes_cuda.cpu()
@@ -97,8 +97,7 @@ def broadcast_data(keys, data, datatype):
             [data[key].contiguous().view(-1) for key in keys], dim=0).cuda()
     else:
         flatten_data = flow.empty(total_numel,
-                                   device=flow.cuda.current_device(),
-                                   dtype=datatype)
+                                   dtype=datatype).cuda()
 
     # Boradcast
     # flow.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),

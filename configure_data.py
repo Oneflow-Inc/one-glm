@@ -19,7 +19,7 @@ import os
 import copy
 import random
 import numpy as np
-import oneflow  as flow
+import oneflow as flow
 import oneflow.utils.data
 import data_utils
 from blocklm_utils import ConstructBlockStrategy
@@ -40,7 +40,8 @@ class MultiTaskDataset(flow.utils.data.Dataset):
         self.reweight = reweight
         self.temperature = temperature
         self.lens = [len(dataset) for dataset in datasets]
-        self.weights = np.array([min(l, max_limit) ** temperature for l in self.lens])
+        self.weights = np.array(
+            [min(l, max_limit) ** temperature for l in self.lens])
         self.total_len = sum(self.lens)
         self.cumulative_lens = list(accumulate(self.lens))
         if self.reweight:
@@ -76,8 +77,10 @@ class MultiTaskDataset(flow.utils.data.Dataset):
     def __getitem__(self, idx):
         if self.reweight:
             rng = random.Random(idx)
-            rng = np.random.RandomState(seed=[rng.randint(0, 2 ** 32 - 1) for _ in range(16)])
-            dataset_idx = rng.choice(np.arange(len(self.datasets)), p=self.weights)
+            rng = np.random.RandomState(
+                seed=[rng.randint(0, 2 ** 32 - 1) for _ in range(16)])
+            dataset_idx = rng.choice(
+                np.arange(len(self.datasets)), p=self.weights)
             dataset = self.datasets[dataset_idx]
             sample_idx = rng.choice(np.arange(len(dataset)))
             item = self.datasets[dataset_idx][sample_idx]
@@ -101,7 +104,7 @@ class DataConfig:
         self.defaults = defaults
 
     def apply(self, args, tokenizer):
-        if int(os.getenv("RANK", -1)) == 0:
+        if flow.env.get_rank() == 0:
             print('configuring data')
         self.apply_defaults(args)
         return make_loaders(args, tokenizer)
@@ -146,7 +149,7 @@ def prepare_tokenizer(args):
     # flow.distributed.broadcast(token_counts,
     #                             mpu.get_model_parallel_src_rank(),
     #                             group=mpu.get_model_parallel_group())
-    
+
     num_tokens = token_counts[0].item()
     eod_token = token_counts[1].item()
     args.vocab_size, args.eod_token = num_tokens, eod_token
@@ -154,8 +157,9 @@ def prepare_tokenizer(args):
 
 
 def make_data_loader(dataset, tokenizer, batch_size, num_iters, args, shuffle=False, block_collate=False):
-    world_size = flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
-    rank = flow.distributed.get_rank(group=mpu.get_data_parallel_group())
+    # world_size = int(os.getenv("WORLD_SIZE", 1))
+    # rank = int(os.getenv("LOCAL_RANK", -1))
+    world_size, rank = 1, 0
     if args.loader_scatter is not None:
         rank = rank // args.loader_scatter
         world_size = world_size // args.loader_scatter
@@ -181,8 +185,8 @@ def make_data_loader(dataset, tokenizer, batch_size, num_iters, args, shuffle=Fa
                                                                         gradient_accumulation_steps=args.gradient_accumulation_steps)
         else:
             batch_sampler = flow.utils.data.BatchSampler(sampler,
-                                                          batch_size,
-                                                          drop_last)
+                                                         batch_size,
+                                                         drop_last)
     collate_fn = None
     if block_collate:
         collate_fn = ConstructBlockStrategy(args, tokenizer, args.seq_length, bert_prob=args.bert_prob,
@@ -202,10 +206,10 @@ def make_data_loader(dataset, tokenizer, batch_size, num_iters, args, shuffle=Fa
                                             task_mask=args.task_mask, random_position=args.random_position,
                                             masked_lm=args.masked_lm).construct_blocks
     data_loader = flow.utils.data.DataLoader(dataset,
-                                              batch_sampler=batch_sampler,
-                                              num_workers=args.num_workers,
-                                              pin_memory=True,
-                                              collate_fn=collate_fn)
+                                             batch_sampler=batch_sampler,
+                                             num_workers=args.num_workers,
+                                             pin_memory=True,
+                                             collate_fn=collate_fn)
 
     return data_loader
 
@@ -252,8 +256,8 @@ def make_loaders(args, tokenizer):
 
     if args.use_tfrecords:
         return make_tfrecord_loaders(args)
-    # flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
-    world_size = int(os.getenv("WORLD_SIZE", 1)) 
+    # int(os.getenv("WORLD_SIZE", 1))
+    world_size = 1 # int(os.getenv("WORLD_SIZE", 1))
     if args.loader_scatter is not None:
         assert world_size % args.loader_scatter == 0
     batch_size = args.batch_size * world_size
@@ -367,12 +371,14 @@ def build_multi_task_dataset(args, tokenizer):
                 SuperGlueDataset(args, task, data_dir, multi_seq_length, "dev", tokenizer, pattern_ensemble=True))
         train = MultiTaskDataset(args.multi_task_data, train_datasets)
         valid = MultiTaskDataset(args.multi_task_data, valid_datasets)
-        world_size = flow.distributed.get_world_size(group=mpu.get_data_parallel_group())
+        world_size = 1 # int(os.getenv("WORLD_SIZE", 1))
         multi_batch_size = args.batch_size * world_size
         if args.multi_batch_size is not None:
             multi_batch_size = args.multi_batch_size * world_size
-        train = make_data_loader(train, tokenizer, multi_batch_size, args.train_iters, args, shuffle=True)
-        valid = make_data_loader(valid, tokenizer, multi_batch_size, args.train_iters, args, shuffle=True)
+        train = make_data_loader(
+            train, tokenizer, multi_batch_size, args.train_iters, args, shuffle=True)
+        valid = make_data_loader(
+            valid, tokenizer, multi_batch_size, args.train_iters, args, shuffle=True)
     return train, valid
 
 

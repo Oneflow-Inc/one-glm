@@ -13,24 +13,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import reduce
 import oneflow  as flow
 
-from .initialize import get_model_parallel_group
+# from .initialize import get_model_parallel_group
 from .utils import split_tensor_along_last_dim
 
 
 def _reduce(input_):
     """All-reduce the the input tensor across model parallel group."""
-    group = get_model_parallel_group()
-
-    # Bypass the function if we are using only 1 GPU.
-    if flow.distributed.get_world_size(group=group) == 1:
-        return input_
-
-    # All-reduce.
-    flow.distributed.all_reduce(input_, group=group)
-
     return input_
+    # group = get_model_parallel_group()
+
+    # # Bypass the function if we are using only 1 GPU.
+    # if flow.distributed.get_world_size(group=group) == 1:
+    #     return input_
+
+    # # All-reduce.
+    # flow.distributed.all_reduce(input_, group=group)
+
+    # return input_
 
 
 def _split(input_):
@@ -43,7 +45,7 @@ def _split(input_):
         return input_
 
     # Split along last dimension.
-    world_size = flow.distributed.get_world_size(group=group)
+    world_size = 1 # flow.distributed.get_world_size(group=group)
     input_list = split_tensor_along_last_dim(input_, world_size)
 
     # Note: flow.split does not create contiguous tensors by default.
@@ -64,7 +66,7 @@ def _gather(input_):
     # Size and dimension.
     last_dim = input_.dim() - 1
     rank = flow.distributed.get_rank(group=group)
-    world_size = flow.distributed.get_world_size(group=group)
+    world_size = 1 # flow.distributed.get_world_size(group=group)
 
     tensor_list = [flow.empty_like(input_) for _ in range(world_size)]
     tensor_list[rank] = input_
@@ -88,16 +90,16 @@ class _CopyToModelParallelRegion(flow.autograd.Function):
         return _reduce(grad_output)
 
 
-class _ReduceFromModelParallelRegion(flow.autograd.Function):
-    """All-redcue the input from the model parallel region."""
+# class _ReduceFromModelParallelRegion(flow.autograd.Function):
+#     """All-redcue the input from the model parallel region."""
 
-    @staticmethod
-    def forward(ctx, input_):
-        return _reduce(input_)
+#     @staticmethod
+#     def forward(ctx, input_):
+#         return _reduce(input_)
 
-    @staticmethod
-    def backward(ctx, grad_output):
-        return grad_output
+#     @staticmethod
+#     def backward(ctx, grad_output):
+#         return grad_output
 
 
 class _ScatterToModelParallelRegion(flow.autograd.Function):
@@ -131,8 +133,8 @@ class _GatherFromModelParallelRegion(flow.autograd.Function):
 def copy_to_model_parallel_region(input_):
     return _CopyToModelParallelRegion.apply(input_)
 
-def reduce_from_model_parallel_region(input_):
-    return _ReduceFromModelParallelRegion.apply(input_)
+# def reduce_from_model_parallel_region(input_):
+#     return _ReduceFromModelParallelRegion.apply(input_)
 
 def scatter_to_model_parallel_region(input_):
     return _ScatterToModelParallelRegion.apply(input_)

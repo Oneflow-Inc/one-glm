@@ -52,7 +52,7 @@ def get_ext(path):
 def get_dataset(name, tokenizer, pre_tokenize, data_parallel_rank, loader_scatter=None, no_lazy_loader=False,
                 half_lazy_loader=False):
     """gets dataset object based on keyword args and file at `path`"""
-    global_rank = flow.distributed.get_rank()
+    global_rank = flow.env.get_rank()
     if not supported_corpus(name):
         raise NotImplementedError('dataset %s is not supported' % name)
     dataset = corpora.NAMED_CORPORA[name]
@@ -123,8 +123,8 @@ def get_dataset(name, tokenizer, pre_tokenize, data_parallel_rank, loader_scatte
                 for i in range(10):
                     rand_id = i if i < 5 else random.randrange(len(text))
                     sample_tokens = text[rand_id]['tokens'][:1024]
-                    print(sample_tokens)
-                    print(tokenizer.DecodeIds(sample_tokens).encode('utf-8'))
+                    # print(sample_tokens)
+                    # print(tokenizer.DecodeIds(sample_tokens).encode('utf-8'))
         else:
             for scatter_id in range(loader_scatter):
                 if data_parallel_rank % loader_scatter == scatter_id and data_parallel_rank // loader_scatter == 0:
@@ -199,7 +199,7 @@ def make_dataset(path, seq_length, mem_length, shuffle=True, split=None, tokeniz
 
     if should_split(split):
         ds = split_ds(ds, split, shuffle=shuffle, save_splits=save_splits, load_splits=load_splits)
-        if save_test_data is not None and flow.distributed.get_rank() == 0:
+        if save_test_data is not None and flow.env.get_rank() == 0:
             test_ds = ds[-1]
             with open(save_test_data, "w", encoding='utf-8') as output:
                 for data in test_ds:

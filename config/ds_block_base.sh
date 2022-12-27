@@ -15,7 +15,7 @@ gpt_options=" \
        --seq-length 512 \
        --max-position-embeddings 512 \
        --save /root/data/checkpoints \
-       --train-iters 150000 \
+       --train-iters 1000 \
        --resume-dataloader \
        --train-data bert-base \
        --lazy-loader \
@@ -29,9 +29,8 @@ gpt_options=" \
        --warmup .05 \
        --checkpoint-activations \
        --deepspeed-activation-checkpointing \
-       --fp16 \
 "
-gpt_options="${gpt_options}
-               --deepspeed \
-               --deepspeed_config ${config_json} \
-"
+# gpt_options="${gpt_options}
+#                --deepspeed \
+#                --deepspeed_config ${config_json} \
+# "

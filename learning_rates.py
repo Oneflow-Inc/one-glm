@@ -34,7 +34,7 @@ class AnnealingLR(_LRScheduler):
         self.decay_style = decay_style.lower() if isinstance(decay_style, str) else None
         self.decay_ratio = 1 / decay_ratio
         self.step(self.num_iters)
-        if not flow.distributed.is_initialized() or flow.distributed.get_rank() == 0:
+        if not flow.distributed.is_initialized() or flow.env.get_rank() == 0:
             print(f'learning rate decaying style {self.decay_style}, ratio {self.decay_ratio}')
 
     def get_lr(self):

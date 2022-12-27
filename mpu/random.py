@@ -51,7 +51,7 @@ def see_memory_usage(message, force=False):
 from .initialize import get_data_parallel_rank
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_world_size
-from .initialize import get_model_parallel_group
+# from .initialize import get_model_parallel_group
 
 mp_rank = None #get_model_parallel_rank()
 mp_size = None #get_model_parallel_world_size()
@@ -114,7 +114,7 @@ def _set_cuda_rng_state(new_state, device=-1):
             default_generator = flow.cuda.default_generators[idx]
             default_generator.set_state(new_state)
 
-    _lazy_call(cb)
+    # _lazy_call(cb)
 
 
 
@@ -220,11 +220,11 @@ def model_parallel_cuda_manual_seed(seed):
     # Data parallel gets the original sedd.
     data_parallel_seed = seed
 
-    if int(os.getenv("RANK", -1)) == 0:
+    if flow.env.get_rank() == 0:
         print('> initializing model parallel cuda seeds on global rank {}, '
               'model parallel rank {}, and data parallel rank {} with '
               'model parallel seed: {} and data parallel seed: {}'.format(
-                  int(os.getenv("RANK", -1)), get_model_parallel_rank(),
+                  flow.env.get_rank(), get_model_parallel_rank(),
                   get_data_parallel_rank(), model_parallel_seed,
                   data_parallel_seed), flush=True)
     _CUDA_RNG_STATE_TRACKER.reset()
