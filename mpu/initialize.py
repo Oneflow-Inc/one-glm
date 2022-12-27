@@ -104,13 +104,13 @@ def get_data_parallel_group():
 
 def get_model_parallel_world_size():
     """Return world size for the model parallel group."""
-    return WORLD_SIZE
+    return 1
     # return flow.distributed.get_world_size(group=get_model_parallel_group())
 
 
 def get_model_parallel_rank():
     """Return my rank for the model parallel group."""
-    return RANK
+    return 0
     # return flow.distributed.get_rank(group=get_model_parallel_group())
 
 
@@ -124,7 +124,7 @@ def get_model_parallel_src_rank():
 
 def get_data_parallel_world_size():
     """Return world size for the data parallel group."""
-    return WORLD_SIZE
+    return 1
     return flow.distributed.get_world_size(group=get_data_parallel_group())
 
 

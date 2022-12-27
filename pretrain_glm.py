@@ -557,6 +557,10 @@ def get_train_val_test_data(args, tokenizer):
 
     return train_data, val_data, test_data
 
+def get_train_dataloader(args,tokenizer):
+    train_data, val_data, test_data, = get_train_val_test_data(args, tokenizer)
+    train_data_iterator = iter(train_data)
+    return train_data_iterator
 
 def main():
     """Main training program."""
@@ -576,7 +580,8 @@ def main():
     # Data stuff.
     global tokenizer
     tokenizer = prepare_tokenizer(args)
-    train_data, val_data, test_data = get_train_val_test_data(args, tokenizer)
+    # train_data, val_data, test_data = get_train_val_test_data(args, tokenizer)
+    train_data_iterator = get_train_dataloader(args,tokenizer) 
     val_data, test_data = None, None
     multi_train_data, multi_val_data = None, None
 
@@ -596,11 +601,7 @@ def main():
     if args.resume_dataloader:
         print("Resume dataloader")
         
-        if train_data is not None:
-            train_data.batch_sampler.start_iter = args.iteration % len(
-                train_data)
     
-    train_data_iterator = iter(train_data)
     print("pass!!")
     multi_train_iterator = None     
     val_data_iterator = None

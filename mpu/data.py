@@ -97,8 +97,7 @@ def broadcast_data(keys, data, datatype):
             [data[key].contiguous().view(-1) for key in keys], dim=0).cuda()
     else:
         flatten_data = flow.empty(total_numel,
-                                   device=flow.cuda.current_device(),
-                                   dtype=datatype)
+                                   dtype=datatype).cuda()
 
     # Boradcast
     # flow.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),
