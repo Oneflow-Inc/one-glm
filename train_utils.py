@@ -285,7 +285,7 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
         model.eval()
     else:
         model.train()
-    print(f"/home/fengwen/datasets/mo.pt  is load"*100)
+    print(f"/home/fengwen/datasets/mo.pt  is load!!")
     
     check_mode(args,model)
 

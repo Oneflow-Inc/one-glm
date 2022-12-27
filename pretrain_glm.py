@@ -226,9 +226,6 @@ def forward_step_graph(args,data,model):
 def forward_step_eager(args,data,model):
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
         data, args)
-
-    print(f'{loss_mask.shape=}')
-    input("loss")
     logits = model(tokens, position_ids, attention_mask)[0]
     losses = flow._C.sparse_softmax_cross_entropy(logits, labels)
     loss_mask = loss_mask.view((-1,))
@@ -258,7 +255,7 @@ def forward_step(data_iterator, model, args, timers, mems):
     else :
         loss = forward_step_eager(args,data,model)
     
-    
+    input(f"{loss.item()=}")
     with open(args.loss_txt_path,'a') as f:
         f.write(str(loss.item())+'\n')
     return loss, mems, mode
@@ -565,22 +562,13 @@ def main():
     """Main training program."""
 
     # Disable CuDNN.
-    flow.backends.cudnn.enabled = False
+    # flow.backends.cudnn.enabled = False
     # Timer.
     timers = Timers()
 
     # Arguments.
     args = get_args()
     args.mem_length = args.mem_length if args.transformer_xl else 0
-    if args.load and not args.new_save_directory:
-        args.experiment_name = os.path.basename(os.path.normpath(args.load))
-    else:
-        args.experiment_name = args.experiment_name + \
-            datetime.now().strftime("%m-%d-%H-%M")
-    if args.save:
-        args.save = os.path.join(args.save, args.experiment_name)
-    # Pytorch distributed.
-    initialize_distributed(args)
 
     # Random seeds for reproducability.
     set_random_seed(args.seed)
@@ -588,77 +576,35 @@ def main():
     # Data stuff.
     global tokenizer
     tokenizer = prepare_tokenizer(args)
-    train_data, val_data, test_data, = get_train_val_test_data(args, tokenizer)
+    train_data, val_data, test_data = get_train_val_test_data(args, tokenizer)
     val_data, test_data = None, None
     multi_train_data, multi_val_data = None, None
-    if args.multi_task_ratio > 0.0:
-        multi_train_data, multi_val_data = build_multi_task_dataset(
-            args, tokenizer)
 
+
+    print('=00'*50)
     # Model, optimizer, and learning rate.
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
-
-    if args.load is not None:
-        with FileLock(os.path.join(pathlib.Path.home(), "checkpoint_lock"), timeout=-1):
-            args.iteration = load_checkpoint(
-                model, optimizer, lr_scheduler, args, no_deepspeed=args.no_deepspeed_load)
-        if args.no_load_optim and args.fp16 and optimizer is not None:
-            if args.deepspeed:
-                optimizer.refresh_fp32_params()
-            else:
-                optimizer._model_params_to_master_params()
-    else:
-        args.iteration = 0
+   
+    args.iteration = 0
     # flow.distributed.barrier()
     if args.switch_linear:
         lr_scheduler.switch_linear(args)
 
     summary_writer = None
-    if flow.env.get_rank() == 0:
-        print('Pretrain GPT2 model')
-        args.log_dir = None
-        if args.train_iters > 0:
-            args.log_dir = get_log_dir(
-                base=args.summary_dir, name=args.experiment_name)
-            summary_writer = get_sample_writer(
-                log_dir=args.log_dir, iteration=args.iteration)
-        print_and_save_args(args, verbose=True, log_dir=args.log_dir)
-
+     
     # Resume data loader if necessary.
     if args.resume_dataloader:
-        print_rank_0("Resume dataloader")
+        print("Resume dataloader")
+        
         if train_data is not None:
             train_data.batch_sampler.start_iter = args.iteration % len(
                 train_data)
-        if val_data is not None:
-            start_iter_val = (args.iteration //
-                              args.eval_interval) * args.eval_iters
-            val_data.batch_sampler.start_iter = start_iter_val % len(val_data)
-        if multi_train_data is not None:
-            multi_train_data.batch_sampler.start_iter = int(args.iteration * args.multi_task_ratio) % len(
-                multi_train_data)
-        if multi_val_data is not None:
-            start_iter_val = (args.iteration // args.eval_interval) * \
-                args.eval_iters * args.multi_task_ratio
-            multi_val_data.batch_sampler.start_iter = start_iter_val % len(
-                multi_val_data)
-    if train_data is not None:
-        train_data_iterator = iter(train_data)
-    else:
-        train_data_iterator = None
-    if multi_train_data is not None:
-        multi_train_iterator = iter(multi_train_data)
-    else:
-        multi_train_iterator = None
-
-    if val_data is not None:
-        val_data_iterator = iter(val_data)
-    else:
-        val_data_iterator = None
-    if multi_val_data is not None:
-        multi_val_iterator = iter(multi_val_data)
-    else:
-        multi_val_iterator = None
+    
+    train_data_iterator = iter(train_data)
+    print("pass!!")
+    multi_train_iterator = None     
+    val_data_iterator = None
+    multi_val_iterator = None
 
     # TODO: figure out how to properly set this especially when resuming training
     iteration = 0
