@@ -314,11 +314,11 @@ def train_test_speed(train_data_iterator, model, args, optimizer, lr_scheduler,t
                                                         lr_scheduler,
                                                         args, timers, mems=[], forward_step_func=forward_step)
    
+    timers('interval time').start()
     tb = time.time()
     t0 = time.time()
     skipped_iters = 0
 
-    timers('interval time').start()
     report_memory_flag = True
     mems = []
     for _ in range(args.train_iters):

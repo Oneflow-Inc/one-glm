@@ -289,17 +289,19 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
     
     check_mode(args,model)
 
-    # optimizer = flow.optim.SGD(
-    #         model.parameters(),
-    #         lr=args.lr,
-    #         momentum=0.9,
-    #         weight_decay=0.0,
-    #     )
-    optimizer = flow.optim.Adam(model.parameters(),
-                                lr=args.lr,
-                                weight_decay=args.weight_decay,
-                                betas=(args.adam_beta1, args.adam_beta2),
-                                eps=args.adam_eps)
+    optimizer = flow.optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            momentum=0.9,
+            weight_decay=0.0,
+        )
+
+    # optimizer = flow.optim.Adam(model.parameters(),
+    #                             lr=args.lr,
+    #                             weight_decay=args.weight_decay,
+    #                             betas=(args.adam_beta1, args.adam_beta2),
+    #                             eps=args.adam_eps)
+    
     lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000) 
 
     if args.mode == "eager":
