@@ -32,8 +32,9 @@ gpt_options=" \
       --warmup .05 \
       --num-workers 1 \
       --mode  eager \
-      --debug_loss True \
-      --loss_txt_path '/home/fengwen/one-glm/runs/sgd_eager_loss_fp32.txt' \
+      --optimizer adam \
+      --debug_loss False \
+      --loss_txt_path '/home/fengwen/one-glm/runs/temp.txt' \
       --debug_pretrain_model '/home/fengwen/BBuf/mo.pt' \
       # --graph_fp16 \
 "
