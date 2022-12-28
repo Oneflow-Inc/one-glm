@@ -1,3 +1,5 @@
+**简体中文** | [English](README_en.md)
+
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
@@ -41,7 +43,7 @@
 
 
 # one-glm
-同步最新的glm版本 ，github链接: https://github.com/THUDM/GLM
+将 https://github.com/THUDM/GLM 改成 OneFlow 后端运行， 获得大幅度的训练速度提升。
 
 # GLM 
 
