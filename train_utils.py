@@ -1,8 +1,8 @@
 import mpu
 import deepspeed
-import oneflow  as flow
+import oneflow as flow
 # from apex.optimizers import FusedAdam as Adam
-from oneflow.optim import Adam 
+from oneflow.optim import Adam
 from oneflow import distributed as dist
 from oneflow.nn.parallel import DistributedDataParallel as ddp
 # from fp16 import FP16_Module, FP16_Optimizer, DynamicLossScaler
@@ -46,33 +46,40 @@ def load_pretrained(model, checkpoint_path, args, task_tokens=None):
             if args.max_position_embeddings + 1 > position_weights.shape[0]:
                 sd['module']["transformer.position_embeddings.weight"] = extend_embedding_weights(
                     position_weights, model.state_dict()["transformer.position_embeddings.weight"].data)
-                print_rank_0(f"Extend position embedding to {args.max_position_embeddings + 1}")
+                print_rank_0(
+                    f"Extend position embedding to {args.max_position_embeddings + 1}")
         if "transformer.block_position_embeddings.weight" in sd["module"]:
             block_position_weights = sd['module']["transformer.block_position_embeddings.weight"]
             if args.max_position_embeddings + 1 > block_position_weights.shape[0]:
                 sd['module']["transformer.block_position_embeddings.weight"] = extend_embedding_weights(
                     block_position_weights,
                     model.state_dict()["transformer.block_position_embeddings.weight"].data)
-                print_rank_0(f"Extend block position embedding to {args.max_position_embeddings + 1}")
-    missing_keys, unexpected_keys = model.load_state_dict(sd['module'], strict=False)
+                print_rank_0(
+                    f"Extend block position embedding to {args.max_position_embeddings + 1}")
+    missing_keys, unexpected_keys = model.load_state_dict(
+        sd['module'], strict=False)
     if missing_keys or unexpected_keys:
-        print_rank_0(f"Missing keys {missing_keys}, unexpected keys {unexpected_keys}")
+        print_rank_0(
+            f"Missing keys {missing_keys}, unexpected keys {unexpected_keys}")
     if args.continuous_prompt and args.prompt_init:
-        model.prompt_spell.init_embedding(model.word_embeddings.weight.data, task_tokens)
+        model.prompt_spell.init_embedding(
+            model.word_embeddings.weight.data, task_tokens)
 
-def check_mode(args,model):
+
+def check_mode(args, model):
     if args.mode == "graph":
         placement = flow.env.all_device_placement("cuda")
         model = model.to_global(placement=placement,
-                                    sbp=flow.sbp.broadcast
-                                    )
+                                sbp=flow.sbp.broadcast
+                                )
     elif args.mode == "eager":
         model.cuda()
         if flow.env.get_world_size() > 1:
             model = ddp(model)
     else:
         raise NotImplementedError
-    
+
+
 def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_length=None):
     """Build the model."""
     assert args.mode in ["eager", "graph"]
@@ -122,17 +129,21 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
                          spell_func=args.prompt_func,
                          attention_scale=args.attention_scale)
         if args.freeze_transformer:
-            model.freeze_transformer(tune_prefix_layers=args.tune_prefix_layers)
+            model.freeze_transformer(
+                tune_prefix_layers=args.tune_prefix_layers)
         if model_type is not None:
             if model_type == 'multiple_choice':
                 if args.cloze_eval:
                     if multi_token:
                         if args.fast_decode:
-                            model = GLMForMultiTokenClozeFast(model, length_penalty=args.length_penalty)
+                            model = GLMForMultiTokenClozeFast(
+                                model, length_penalty=args.length_penalty)
                         else:
-                            model = GLMForMultiTokenCloze(model, length_penalty=args.length_penalty)
+                            model = GLMForMultiTokenCloze(
+                                model, length_penalty=args.length_penalty)
                     else:
-                        model = GLMForSingleTokenCloze(model, take_softmax=args.adapet)
+                        model = GLMForSingleTokenCloze(
+                            model, take_softmax=args.adapet)
                 else:
                     model = GLMForSequenceClassification(model, args.hidden_size, args.output_dropout, args.pool_token,
                                                          num_class=num_labels)
@@ -213,7 +224,8 @@ def get_optimizer(param_groups, args):
                              eps=args.adam_eps)
         elif args.optimizer == 'adafactor':
             from transformers import Adafactor
-            optimizer = Adafactor(param_groups, lr=args.lr, relative_step=False, warmup_init=False)
+            optimizer = Adafactor(param_groups, lr=args.lr,
+                                  relative_step=False, warmup_init=False)
         else:
             raise NotImplementedError
 
@@ -265,42 +277,47 @@ def load_torch_model(model, path):
     torch_params = torch.load(path, map_location='cpu')
 
     flow_params = {}
-    for k,v in torch_params.items():
+    for k, v in torch_params.items():
         flow_params[k] = flow.Tensor(
             v.numpy().astype("float32"))
     model.load_state_dict(flow_params, strict=False)
     print("load pretraining model succeed!")
+
 
 def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_labels=None, spell_length=None):
     """Setup model and optimizer."""
 
     model = get_model(args, model_type=model_type, multi_token=multi_token, num_labels=num_labels,
                       spell_length=spell_length)
-    
-    
+
     if args.debug_loss:
         # load pretrain
         load_torch_model(model, path=args.debug_pretrain_model)
-        # load_torch_model(model,"/home/fengwen/datasets/mo.pt")    
+        # load_torch_model(model,"/home/fengwen/datasets/mo.pt")
         model.eval()
     else:
         model.train()
     print(f"/home/fengwen/datasets/mo.pt  is load!!")
-    
-    check_mode(args,model)
 
-    # optimizer = flow.optim.SGD(
-    #         model.parameters(),
-    #         lr=args.lr,
-    #         momentum=0.9,
-    #         weight_decay=0.0,
-    #     )
-    optimizer = flow.optim.Adam(model.parameters(),
-                                lr=args.lr,
-                                weight_decay=args.weight_decay,
-                                betas=(args.adam_beta1, args.adam_beta2),
-                                eps=args.adam_eps)
-    lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000) 
+    check_mode(args, model)
+
+    if args.optimizer == 'adam':
+        optimizer = flow.optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            momentum=0.9,
+            weight_decay=0.0,
+        )
+    else:
+        optimizer = flow.optim.Adam(
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=args.weight_decay,
+            betas=(args.adam_beta1, args.adam_beta2),
+            eps=args.adam_eps
+        )
+
+    lr_scheduler = flow.optim.lr_scheduler.StepLR(optimizer, step_size=100000)
 
     if args.mode == "eager":
         return model, optimizer, lr_scheduler
@@ -334,7 +351,8 @@ def backward_step(optimizer, model, lm_loss, args, timers):
         timers('allreduce').reset()
     else:
         timers('allreduce').start()
-        model.allreduce_params(reduce_after=False, fp32_allreduce=args.fp32_allreduce)
+        model.allreduce_params(
+            reduce_after=False, fp32_allreduce=args.fp32_allreduce)
         timers('allreduce').stop()
 
     # Update master gradients.
@@ -344,7 +362,7 @@ def backward_step(optimizer, model, lm_loss, args, timers):
 
         # Clipping gradients helps prevent the exploding gradient.
         if args.clip_grad > 0 and args.mode == 'eager':
-            if not args.fp16 :
+            if not args.fp16:
                 mpu.clip_grad_norm(model.parameters(), args.clip_grad)
             else:
                 optimizer.clip_master_grads(args.clip_grad)
@@ -358,12 +376,17 @@ def see_memory_usage(message, force=False):
     dist.barrier()
     if dist.get_rank() == 0:
         print(message)
-        print("Memory Allocated ", flow.cuda.memory_allocated() / (1024 * 1024 * 1024), "GigaBytes")
-        print("Max Memory Allocated ", flow.cuda.max_memory_allocated() / (1024 * 1024 * 1024), "GigaBytes")
-        print("Cache Allocated ", flow.cuda.memory_cached() / (1024 * 1024 * 1024), "GigaBytes")
-        print("Max cache Allocated ", flow.cuda.max_memory_cached() / (1024 * 1024 * 1024), "GigaBytes")
+        print("Memory Allocated ", flow.cuda.memory_allocated() /
+              (1024 * 1024 * 1024), "GigaBytes")
+        print("Max Memory Allocated ", flow.cuda.max_memory_allocated() /
+              (1024 * 1024 * 1024), "GigaBytes")
+        print("Cache Allocated ", flow.cuda.memory_cached() /
+              (1024 * 1024 * 1024), "GigaBytes")
+        print("Max cache Allocated ", flow.cuda.max_memory_cached() /
+              (1024 * 1024 * 1024), "GigaBytes")
         print(" ")
         # input("Press Any Key To Continue ..")
+
 
 def train_step_graph(data_iterator, model, optimizer, lr_scheduler):
     placement = flow.env.all_device_placement("cuda")
@@ -377,22 +400,22 @@ def train_step_graph(data_iterator, model, optimizer, lr_scheduler):
     loss = model(tokens, position_ids, attention_mask, labels, loss_mask)
 
 
-
-
 def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forward_step_func, mems=None,
                single_step=False):
     """Single training step."""
     mems = [] if mems is None else mems
     if args.mode == 'eager':
         optimizer.zero_grad()
-        loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+        loss, mems, _ = forward_step_func(
+            data_iterator, model, args, timers, mems)
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
-        return loss,0,mems
-    elif args.mode=="graph":
-        loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
-        return loss,0,mems
+        return loss, 0, mems
+    elif args.mode == "graph":
+        loss, mems, _ = forward_step_func(
+            data_iterator, model, args, timers, mems)
+        return loss, 0, mems
     else:
         raise ImportError
 
@@ -404,11 +427,12 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
         skipped_iter, complete = 0, False
         # Forward model for one step.
         # timers('forward').start()
-        lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+        lm_loss, mems, _ = forward_step_func(
+            data_iterator, model, args, timers, mems)
 
-        if args.mode=='graph':
-            return lm_loss,skipped_iter,mems
-            
+        if args.mode == 'graph':
+            return lm_loss, skipped_iter, mems
+
         # timers('forward').stop()
         # print_rank_0("Forward step")
         if not args.deepspeed:
@@ -416,7 +440,8 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
 
         reduced_loss = lm_loss.detach().clone().view(1)
         # flow.distributed.all_reduce(reduced_loss.data, group=mpu.get_data_parallel_group())
-        reduced_loss.data = reduced_loss.data / (args.world_size / args.model_parallel_size)
+        reduced_loss.data = reduced_loss.data / \
+            (args.world_size / args.model_parallel_size)
 
         if not DynamicLossScaler._has_inf_or_nan(reduced_loss):
             lm_loss_total += reduced_loss
@@ -440,7 +465,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
                 else:
                     model.step()
             else:
-                if count == args.gradient_accumulation_steps :
+                if count == args.gradient_accumulation_steps:
                     optimizer.step()
                     complete = True
                     # Update learning rate.

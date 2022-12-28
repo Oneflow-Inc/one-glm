@@ -395,7 +395,7 @@ def add_finetune_config_args(parser):
     group.add_argument('--adam-beta1', type=float, default=0.9)
     group.add_argument('--adam-beta2', type=float, default=0.999)
     group.add_argument('--adam-eps', type=float, default=1e-8)
-    group.add_argument('--optimizer', type=str, choices=['adam', 'adafactor'], default='adam')
+    group.add_argument('--optimizer', type=str, choices=['adam', 'sgd'], default='adam')
     group.add_argument('--wsc-negative', action='store_true')
     group.add_argument('--overwrite', action='store_true')
     group.add_argument('--no-validation', action='store_true')
