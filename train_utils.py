@@ -301,7 +301,7 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
 
     check_mode(args, model)
 
-    if args.optimizer == 'adam':
+    if args.optimizer == 'sgd':
         optimizer = flow.optim.SGD(
             model.parameters(),
             lr=args.lr,
