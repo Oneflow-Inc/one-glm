@@ -45,15 +45,16 @@
 # one-glm
 将 https://github.com/THUDM/GLM 改成 OneFlow 后端运行， 获得大幅度的训练速度提升。
 
-下面分别是在 A100 PCIE 40G 和 GTX 3090 上 one-glm 相比于原始的 THUDM/GLM 的预训练模型的性能表现：
+下面分是在 A100 PCIE 40G 相比于原始的 THUDM/GLM 的预训练模型的性能和显存表现：
 
-![图片](https://user-images.githubusercontent.com/35585791/209784371-b6257ac0-83dd-4a23-b5ce-05508bdda29c.png)
+![图片](https://user-images.githubusercontent.com/35585791/211490102-dc058e77-b118-432b-88a1-f42140e58f7e.png)
 
-![图片](https://user-images.githubusercontent.com/35585791/209784588-0e72d49e-c5c3-4b4b-94ad-569f407d9716.png)
+![图片](https://user-images.githubusercontent.com/35585791/211490128-1d90b8ef-f533-4b26-a5fc-69792cc767e6.png)
 
-![图片](https://user-images.githubusercontent.com/35585791/209786126-54d19d39-ef07-47b6-bf29-1b5bb6a4eb07.png)
+![图片](https://user-images.githubusercontent.com/35585791/211490160-57e6de3f-dd09-4176-87fd-df818d6ec1b0.png)
 
-![图片](https://user-images.githubusercontent.com/35585791/209786155-445a3eff-a01b-4652-9e6b-48a11b3555ff.png)
+![图片](https://user-images.githubusercontent.com/35585791/211490175-2147dae5-204b-43a5-892a-d0414e484435.png)
+
 
 # GLM 
 
