@@ -9,7 +9,7 @@ gpt_options=" \
        --bert-prob 1.0 \
        --avg-block-length 3 \
        --experiment-name blocklm-large-blank \
-       --model-parallel-size ${MP_SIZE} \
+       --model-parallel-size 1 \
        --num-layers 24 \
        --hidden-size 1024 \
        --num-attention-heads 16 \

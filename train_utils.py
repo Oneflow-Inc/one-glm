@@ -1,14 +1,14 @@
 import deepspeed
 import oneflow as torch
 from oneflow.optim import Adam
-from torch import distributed as dist
+from oneflow import distributed as dist
 
 import mpu
 # from fp16 import FP16_Module, FP16_Optimizer, DynamicLossScaler
 from learning_rates import AnnealingLR
 from model import GLMModel, glm_get_params_for_weight_decay_optimization
 from model import GLMForMultiTokenCloze, GLMForMultiTokenClozeFast, GLMForSingleTokenCloze, GLMForSequenceClassification
-from model import PyTorchDistributedDataParallel as TorchDDP, DistributedDataParallel as LocalDDP
+from oneflow.nn.parallel import DistributedDataParallel  as TorchDDP, DistributedDataParallel as LocalDDP
 from model.modeling_bert import BertForMultipleChoice, BertForSequenceClassification
 from utils import print_rank_0, get_checkpoint_name, get_checkpoint_iteration
 
@@ -147,8 +147,7 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
     if not args.deepspeed and (args.train_iters or args.epochs):
         if args.DDP_impl == 'torch':
             i = torch.cuda.current_device()
-            model = TorchDDP(model, device_ids=[i], output_device=i,
-                             process_group=mpu.get_data_parallel_group())
+            model = TorchDDP(model).cuda()
         elif args.DDP_impl == 'local':
             model = LocalDDP(model)
         else:
@@ -158,16 +157,16 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
 
 def get_optimizer_param_groups(model):
     # Build parameter groups (weight decay and non-decay).
-    while isinstance(model, (LocalDDP, TorchDDP, )):
+    if type(model) in (LocalDDP,):
         model = model.module
     param_groups = glm_get_params_for_weight_decay_optimization(model)
 
     # Add model parallel attribute if it is not set.
-    for param_group in param_groups:
-        # print('## param_group', len(param_group['params']))
-        for param in param_group['params']:
-            if not hasattr(param, 'model_parallel'):
-                param.model_parallel = False
+    # for param_group in param_groups:
+    #     # print('## param_group', len(param_group['params']))
+    #     for param in param_group['params']:
+    #         if not hasattr(param, 'model_parallel'):
+    #             param.model_parallel = False
 
     return param_groups
 
