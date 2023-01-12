@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
+import oneflow as torch
 import mpu
 
 # item() is a recent addition, so this helps with backward compatibility.
@@ -188,7 +188,7 @@ class DynamicLossScaler:
 """
 TO-DO separate out into an example.
 if __name__ == "__main__":
-    import torch
+    import oneflow as torch
     from torch.autograd import Variable
     from dynamic_loss_scaler import DynamicLossScaler
 

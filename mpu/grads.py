@@ -18,7 +18,7 @@
 # repo: https://github.com/pytorch/pytorch
 
 
-import torch
+import oneflow as torch
 from torch._six import inf
 
 from .initialize import get_model_parallel_group

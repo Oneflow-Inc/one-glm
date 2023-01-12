@@ -2,8 +2,8 @@ import string
 import datetime
 import random
 import re
-import torch
-import torch.nn.functional as F
+import oneflow as torch
+import oneflow as torch.nn.functional as F
 import mpu
 from utils import print_rank_0
 from generation_utils import BeamSearchScorer, LogitsProcessorList, MinLengthLogitsProcessor, \

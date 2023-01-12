@@ -14,8 +14,8 @@ from pretrain_glm import forward_step as lm_forward_step
 import pathlib
 import mpu
 
-import torch
-import torch.utils.data
+import oneflow as torch
+import oneflow as torch.utils.data
 from configure_data import prepare_tokenizer
 
 from utils import print_rank_0

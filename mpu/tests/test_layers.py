@@ -17,8 +17,8 @@ import random
 import sys
 sys.path.append("../..")
 
-import torch
-import torch.nn.init as init
+import oneflow as torch
+import oneflow as torch.nn.init as init
 from torch.nn.parameter import Parameter
 import mpu
 

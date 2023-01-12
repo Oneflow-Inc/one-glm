@@ -17,7 +17,7 @@ import os
 import math
 import time
 import random
-import torch
+import oneflow as torch
 
 from .samplers import DistributedBatchSampler
 from .datasets import split_ds, ConcatDataset, SplitDataset, BertSentencepairDataset, \

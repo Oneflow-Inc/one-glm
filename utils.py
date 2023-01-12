@@ -19,7 +19,7 @@ import os
 import random
 import time
 import numpy as np
-import torch
+import oneflow as torch
 import json
 import subprocess
 

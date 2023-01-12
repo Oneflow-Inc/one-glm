@@ -17,8 +17,8 @@ import random
 import sys
 sys.path.append("../..")
 
-import torch
-import torch.nn.functional as F
+import oneflow as torch
+import oneflow as torch.nn.functional as F
 import mpu
 from mpu.cross_entropy import vocab_parallel_cross_entropy
 

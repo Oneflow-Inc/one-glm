@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
+import oneflow as torch
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
-import torch.distributed as dist
+import oneflow as torch.distributed as dist
 from torch.nn.modules import Module
 from torch.autograd import Variable
 from torch.nn.parallel.distributed import DistributedDataParallel as DDP

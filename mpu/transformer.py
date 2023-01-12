@@ -17,8 +17,8 @@
 
 import math
 
-import torch
-import torch.nn.init as init
+import oneflow as torch
+import oneflow as torch.nn.init as init
 from apex.normalization.fused_layer_norm import FusedLayerNorm as LayerNorm
 
 from .initialize import get_model_parallel_world_size

@@ -21,10 +21,10 @@ import os
 import random
 import math
 
-import torch.distributed
+import oneflow as torch.distributed
 from filelock import FileLock
 import numpy as np
-import torch
+import oneflow as torch
 
 import deepspeed
 from contextlib import ExitStack
@@ -41,7 +41,7 @@ from utils import report_memory
 from utils import print_and_save_args
 from utils import print_rank_0
 from utils import get_sample_writer, get_log_dir, get_hostname
-import torch.distributed as dist
+import oneflow as torch.distributed as dist
 
 
 def get_masks_and_position_ids(data,

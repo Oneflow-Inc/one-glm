@@ -27,9 +27,9 @@ import tarfile
 import tempfile
 import shutil
 
-import torch
+import oneflow as torch
 from torch import nn
-import torch.nn.functional as F
+import oneflow as torch.nn.functional as F
 from torch.nn import CrossEntropyLoss
 
 # from torch.utils.checkpoint import checkpoint

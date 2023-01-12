@@ -16,7 +16,7 @@
 import sys
 sys.path.append("../..")
 
-import torch
+import oneflow as torch
 import mpu
 
 from commons import initialize_distributed

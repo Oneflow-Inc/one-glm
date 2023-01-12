@@ -1,4 +1,4 @@
-# import torch
+# import oneflow as torch
 # from mpu.transformer import GPT2ParallelSelfAttention
 #
 # b = torch.arange(2) * 1000

@@ -3,8 +3,8 @@ import json
 import random
 import string
 import unidecode
-import torch
-import torch.utils.data
+import oneflow as torch
+import oneflow as torch.utils.data
 import numpy as np
 from tasks.data_utils import InputExample
 from tqdm import tqdm

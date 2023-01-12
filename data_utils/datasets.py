@@ -23,7 +23,7 @@ import json
 import csv
 import math
 import random
-import torch
+import oneflow as torch
 import tqdm
 
 from torch.utils import data

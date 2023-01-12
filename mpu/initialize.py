@@ -16,7 +16,7 @@
 
 """Model and data parallel groups."""
 
-import torch
+import oneflow as torch
 
 from .utils import ensure_divisibility
 

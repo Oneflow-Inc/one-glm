@@ -18,9 +18,9 @@
 # repo: https://github.com/pytorch/pytorch
 
 
-import torch
-import torch.nn.functional as F
-import torch.nn.init as init
+import oneflow as torch
+import oneflow as torch.nn.functional as F
+import oneflow as torch.nn.init as init
 from torch.nn.parameter import Parameter
 
 from .initialize import get_model_parallel_rank

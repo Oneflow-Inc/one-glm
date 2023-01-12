@@ -17,7 +17,7 @@ import math
 import os
 import sys
 
-import torch
+import oneflow as torch
 from torch.utils import data
 import numpy as np
 

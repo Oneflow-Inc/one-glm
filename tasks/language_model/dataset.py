@@ -1,4 +1,4 @@
-import torch
+import oneflow as torch
 import json
 import math
 import numpy as np

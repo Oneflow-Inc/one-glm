@@ -21,14 +21,14 @@
 # Parts of the code here are adapted from PyTorch
 # repo: https://github.com/pytorch/pytorch
 import contextlib
-import torch.distributed as dist
-import torch
+import oneflow as torch.distributed as dist
+import oneflow as torch
 from torch import _C
 from torch.cuda import _lazy_call, device as device_ctx_manager
 #from torch.utils.checkpoint import detach_variable
 
 
-import torch.distributed as dist
+import oneflow as torch.distributed as dist
 PARTITION_ACTIVATIONS = False
 PA_CORRECTNESS_TEST= False
 

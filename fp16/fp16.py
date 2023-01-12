@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Stable version of apex FP16 Optimizer"""
-import torch
+import oneflow as torch
 from torch import nn
 from torch.autograd import Variable
 from torch.nn.parameter import Parameter

@@ -18,7 +18,7 @@ import operator
 import sys
 sys.path.append("../..")
 
-import torch
+import oneflow as torch
 import mpu
 from mpu import data as data_utils
 

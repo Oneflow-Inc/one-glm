@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-import torch
+import oneflow as torch
 
 from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank

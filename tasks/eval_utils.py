@@ -18,7 +18,7 @@
 import os
 import time
 import random
-import torch
+import oneflow as torch
 import datetime
 
 import mpu

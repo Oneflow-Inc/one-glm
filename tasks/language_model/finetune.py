@@ -17,7 +17,7 @@
 
 import math
 import functools
-import torch
+import oneflow as torch
 
 from utils import print_rank_0
 import mpu

@@ -17,7 +17,7 @@ import argparse
 import os
 import random
 import numpy
-import torch
+import oneflow as torch
 
 import mpu
 

@@ -1,5 +1,5 @@
 import deepspeed
-import torch
+import oneflow as torch
 from apex.optimizers import FusedAdam as Adam
 from torch import distributed as dist
 

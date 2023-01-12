@@ -1,6 +1,6 @@
 import sys
 import os
-import torch
+import oneflow as torch
 import copy
 
 checkpoint = sys.argv[1]

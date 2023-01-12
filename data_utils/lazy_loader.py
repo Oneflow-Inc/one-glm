@@ -20,7 +20,7 @@ import time
 import numpy as np
 from itertools import accumulate
 
-import torch
+import oneflow as torch
 from torch.multiprocessing import Lock
 
 

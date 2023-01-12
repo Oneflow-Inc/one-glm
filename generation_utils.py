@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from collections import UserDict
 from typing import Optional, Tuple, List, Iterable
 
-import torch
+import oneflow as torch
 
 PROCESS_INPUTS_DOCSTRING = r"""
     Args:
