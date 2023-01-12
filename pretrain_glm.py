@@ -355,8 +355,8 @@ def train(model, optimizer, lr_scheduler,
             if report_memory_flag:
                 report_memory('after {} iterations'.format(args.iteration))
                 report_memory_flag = False
-            # for i in range(torch.env.get_world_size()):
-            #     if i == torch.env.get_rank():
+            # for i in range(torch.distributed.get_world_size()):
+            #     if i == torch.distributed.get_rank():
             #         print(get_hostname())
             #         timers.log(['forward', 'backward', 'optimizer',
             #                     'batch generator', 'data loader'],
@@ -587,7 +587,7 @@ def main():
         lr_scheduler.switch_linear(args)
 
     summary_writer = None
-    if torch.env.get_rank() == 0:
+    if torch.distributed.get_rank() == 0:
         print('Pretrain GPT2 model')
         args.log_dir = None
         if args.train_iters > 0:

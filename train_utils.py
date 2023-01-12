@@ -18,7 +18,7 @@ def load_pretrained(model, checkpoint_path, args, task_tokens=None):
     checkpoint_name = get_checkpoint_name(load_dir, tag, release)
     if mpu.get_data_parallel_rank() == 0:
         print('global rank {} is loading pretrained model {}'.format(
-            torch.env.get_rank(), checkpoint_name))
+            torch.distributed.get_rank(), checkpoint_name))
     # Load the checkpoint.
     sd = torch.load(checkpoint_name, map_location='cpu')
     if args.deepspeed:
