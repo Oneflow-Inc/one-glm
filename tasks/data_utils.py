@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import oneflow as torch
 import oneflow as torch.utils.data
-from torch.utils.data.dataloader import default_collate
+from oneflow.utils.data.dataloader import default_collate
 
 import mpu
 

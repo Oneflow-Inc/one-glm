@@ -10,8 +10,8 @@
 # s = GPT2ParallelSelfAttention._rel_shift(s)
 # print(s)
 
-from torch.nn.modules import Linear
-from torch.optim import Adam
+from oneflow.nn.modules import Linear
+from oneflow.optim import Adam
 from learning_rates import AnnealingLR
 import matplotlib.pyplot as plt
 import numpy as np

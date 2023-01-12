@@ -19,7 +19,7 @@
 
 
 import oneflow as torch
-from torch._six import inf
+from oneflow._six import inf
 
 from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
@@ -28,7 +28,7 @@ from .initialize import get_model_parallel_rank
 def clip_grad_norm(parameters, max_norm, norm_type=2):
     """Clips gradient norm of an iterable of parameters.
 
-    This is adapted from torch.nn.utils.clip_grad.clip_grad_norm_ and
+    This is adapted from oneflow.nn.utils.clip_grad.clip_grad_norm_ and
     added functionality to handle model parallel parameters. Note that
     the gradients are modified in place.
 

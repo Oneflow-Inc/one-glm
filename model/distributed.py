@@ -14,11 +14,11 @@
 # limitations under the License.
 
 import oneflow as torch
-from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 import oneflow as torch.distributed as dist
-from torch.nn.modules import Module
-from torch.autograd import Variable
-from torch.nn.parallel.distributed import DistributedDataParallel as DDP
+from oneflow.nn.modules import Module
+from oneflow.autograd import Variable
+from oneflow.nn.parallel.distributed import DistributedDataParallel as DDP
 
 import mpu
 

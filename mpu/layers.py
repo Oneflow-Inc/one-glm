@@ -21,7 +21,7 @@
 import oneflow as torch
 import oneflow as torch.nn.functional as F
 import oneflow as torch.nn.init as init
-from torch.nn.parameter import Parameter
+from oneflow.nn.parameter import Parameter
 
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_world_size
@@ -71,7 +71,7 @@ def _initialize_affine_weight(weight, output_size, input_size,
 class VocabParallelEmbedding(torch.nn.Module):
     """Embedding parallelized in the vocabulary dimension.
 
-    This is mainly adapted from torch.nn.Embedding and all the default
+    This is mainly adapted from oneflow.nn.Embedding and all the default
     values are kept.
     Arguments:
         num_embeddings: vocabulary size.
@@ -130,7 +130,7 @@ class VocabParallelEmbedding(torch.nn.Module):
 class ParallelEmbedding(torch.nn.Module):
     """Embedding parallelized in the embedding dimension.
 
-    This is mainly adapted from torch.nn.Embedding and all the default
+    This is mainly adapted from oneflow.nn.Embedding and all the default
     values are kept.
     Arguments:
         num_embeddings: vocabulary size.

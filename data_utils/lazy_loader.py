@@ -21,7 +21,7 @@ import numpy as np
 from itertools import accumulate
 
 import oneflow as torch
-from torch.multiprocessing import Lock
+from oneflow.multiprocessing import Lock
 
 
 def get_lazy_path(path):

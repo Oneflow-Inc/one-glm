@@ -19,7 +19,7 @@ sys.path.append("../..")
 
 import oneflow as torch
 import oneflow as torch.nn.init as init
-from torch.nn.parameter import Parameter
+from oneflow.nn.parameter import Parameter
 import mpu
 
 from commons import initialize_distributed

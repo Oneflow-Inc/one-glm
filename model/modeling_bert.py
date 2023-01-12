@@ -30,9 +30,9 @@ import shutil
 import oneflow as torch
 from torch import nn
 import oneflow as torch.nn.functional as F
-from torch.nn import CrossEntropyLoss
+from oneflow.nn import CrossEntropyLoss
 
-# from torch.utils.checkpoint import checkpoint
+# from oneflow.utils.checkpoint import checkpoint
 
 from data_utils.file_utils import cached_path
 

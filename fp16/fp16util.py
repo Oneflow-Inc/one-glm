@@ -15,8 +15,8 @@
 
 import oneflow as torch
 import oneflow as torch.nn as nn
-from torch.autograd import Variable
-from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from oneflow.autograd import Variable
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 import mpu
 

@@ -21,7 +21,7 @@ import tqdm
 from multiprocessing import Queue, Process
 from queue import Empty
 from collections import defaultdict
-from torch.utils import data
+from oneflow.utils import data
 from .lazy_loader import LazyLoader
 from utils import print_rank_0
 

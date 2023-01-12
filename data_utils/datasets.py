@@ -26,7 +26,7 @@ import random
 import oneflow as torch
 import tqdm
 
-from torch.utils import data
+from oneflow.utils import data
 import pandas as pd
 import numpy as np
 
