@@ -16,8 +16,8 @@
 """GPT-2 model."""
 
 import oneflow as torch
-import oneflow as torch.nn as nn
-import oneflow as torch.nn.functional as F
+import oneflow.nn as nn
+import oneflow.nn.functional as F
 
 import mpu
 from model.prompt import PromptSpell

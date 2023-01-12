@@ -15,7 +15,7 @@
 
 import oneflow as torch
 from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
-import oneflow as torch.distributed as dist
+import oneflow.distributed as dist
 from oneflow.nn.modules import Module
 from oneflow.autograd import Variable
 from oneflow.nn.parallel.distributed import DistributedDataParallel as DDP

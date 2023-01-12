@@ -18,7 +18,7 @@ import sys
 sys.path.append("../..")
 
 import oneflow as torch
-import oneflow as torch.nn.init as init
+import oneflow.nn.init as init
 from oneflow.nn.parameter import Parameter
 import mpu
 

@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import oneflow as torch
-import oneflow as torch.nn as nn
+import oneflow.nn as nn
 from oneflow.autograd import Variable
 from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 

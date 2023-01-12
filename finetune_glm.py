@@ -15,7 +15,7 @@ import pathlib
 import mpu
 
 import oneflow as torch
-import oneflow as torch.utils.data
+import oneflow.utils.data
 from configure_data import prepare_tokenizer
 
 from utils import print_rank_0

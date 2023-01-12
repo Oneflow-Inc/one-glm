@@ -4,7 +4,7 @@ import random
 import string
 import unidecode
 import oneflow as torch
-import oneflow as torch.utils.data
+import oneflow.utils.data
 import numpy as np
 from tasks.data_utils import InputExample
 from tqdm import tqdm

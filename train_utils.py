@@ -1,6 +1,6 @@
 import deepspeed
 import oneflow as torch
-from apex.optimizers import FusedAdam as Adam
+from oneflow.optim import Adam
 from torch import distributed as dist
 
 import mpu

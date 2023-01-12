@@ -19,8 +19,8 @@
 
 
 import oneflow as torch
-import oneflow as torch.nn.functional as F
-import oneflow as torch.nn.init as init
+import oneflow.nn.functional as F
+import oneflow.nn.init as init
 from oneflow.nn.parameter import Parameter
 
 from .initialize import get_model_parallel_rank

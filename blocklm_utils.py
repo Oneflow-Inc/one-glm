@@ -1,5 +1,5 @@
 import oneflow as torch
-import oneflow as torch.utils.data
+import oneflow.utils.data
 import mpu
 import random
 import copy

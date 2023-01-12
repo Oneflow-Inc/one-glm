@@ -23,7 +23,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import oneflow as torch
-import oneflow as torch.utils.data
+import oneflow.utils.data
 from oneflow.utils.data.dataloader import default_collate
 
 import mpu

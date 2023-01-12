@@ -1,7 +1,7 @@
 """Multiple choice model."""
 
 import oneflow as torch
-import oneflow as torch.nn
+import oneflow.nn
 from .modeling_glm import GLMModel
 
 

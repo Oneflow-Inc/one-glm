@@ -20,7 +20,7 @@ import copy
 import random
 import numpy as np
 import oneflow as torch
-import oneflow as torch.utils.data
+import oneflow.utils.data
 import data_utils
 from blocklm_utils import ConstructBlockStrategy
 from data_utils.tokenization import make_tokenizer

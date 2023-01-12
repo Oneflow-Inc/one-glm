@@ -29,7 +29,7 @@ import shutil
 
 import oneflow as torch
 from torch import nn
-import oneflow as torch.nn.functional as F
+import oneflow.nn.functional as F
 from oneflow.nn import CrossEntropyLoss
 
 # from oneflow.utils.checkpoint import checkpoint
@@ -265,7 +265,7 @@ class BertConfig(object):
 try:
     from apex.normalization.fused_layer_norm import FusedLayerNorm as BertLayerNorm
 except ImportError:
-    print("Better speed can be achieved with apex installed from https://www.github.com/nvidia/apex.")
+    print("Better speed can chieved with apex installed from https://www.github.com/nvidia/apex.")
 
 
     class BertLayerNorm(nn.Module):

@@ -21,7 +21,7 @@ import os
 import random
 import math
 
-import oneflow as torch.distributed
+import oneflow.distributed
 from filelock import FileLock
 import numpy as np
 import oneflow as torch
@@ -41,7 +41,7 @@ from utils import report_memory
 from utils import print_and_save_args
 from utils import print_rank_0
 from utils import get_sample_writer, get_log_dir, get_hostname
-import oneflow as torch.distributed as dist
+import oneflow.distributed as dist
 
 
 def get_masks_and_position_ids(data,

@@ -17,7 +17,7 @@
 
 import os
 import oneflow as torch
-import oneflow as torch.nn.functional as F
+import oneflow.nn.functional as F
 import time
 from datetime import datetime
 from arguments import get_args
