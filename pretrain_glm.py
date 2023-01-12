@@ -355,8 +355,8 @@ def train(model, optimizer, lr_scheduler,
             if report_memory_flag:
                 report_memory('after {} iterations'.format(args.iteration))
                 report_memory_flag = False
-            # for i in range(torch.distributed.get_world_size()):
-            #     if i == torch.distributed.get_rank():
+            # for i in range(torch.env.get_world_size()):
+            #     if i == torch.env.get_rank():
             #         print(get_hostname())
             #         timers.log(['forward', 'backward', 'optimizer',
             #                     'batch generator', 'data loader'],
@@ -486,10 +486,7 @@ def initialize_distributed(args):
     args.master_ip = os.getenv('MASTER_ADDR', 'localhost')
     args.master_port = os.getenv('MASTER_PORT', '6000')
     init_method += args.master_ip + ':' + args.master_port
-    torch.distributed.init_process_group(
-        backend=args.distributed_backend,
-        world_size=args.world_size, rank=args.rank,
-        init_method=init_method)
+ 
 
     # Set the model-parallel / data-parallel communicators.
     mpu.initialize_model_parallel(args.model_parallel_size)
@@ -590,7 +587,7 @@ def main():
         lr_scheduler.switch_linear(args)
 
     summary_writer = None
-    if torch.distributed.get_rank() == 0:
+    if torch.env.get_rank() == 0:
         print('Pretrain GPT2 model')
         args.log_dir = None
         if args.train_iters > 0:

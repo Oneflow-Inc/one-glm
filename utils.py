@@ -23,7 +23,7 @@ import oneflow as torch
 import json
 import subprocess
 
-from fp16 import FP16_Optimizer
+# from fp16 import FP16_Optimizer
 import mpu
 from tensorboardX import SummaryWriter
 
@@ -43,7 +43,7 @@ def get_sample_writer(log_dir, iteration=0):
 
 def print_rank_0(message):
     if torch.distributed.is_initialized():
-        if torch.distributed.get_rank() == 0:
+        if torch.env.get_rank() == 0:
             print(message, flush=True)
     else:
         print(message, flush=True)
@@ -57,7 +57,7 @@ def get_hostname():
 
 
 def get_spare_port(args):
-    if torch.distributed.get_rank() == 0:
+    if torch.env.get_rank() == 0:
         port = subprocess.check_output(["shuf -n 1 -i 10000-65535"], shell=True)
         port = int(port.strip())
         if port == args.master_port:
@@ -93,11 +93,11 @@ def print_and_save_args(args, verbose=True, log_dir=None):
 def print_params_min_max_norm(optimizer, iteration):
     """Print min, max, and norm of all parameters."""
     index = 0
-    rank = torch.distributed.get_rank()
+    rank = torch.env.get_rank()
     string = 'iteration, rank, index, model-parallel,min, max, norm\n'
     optimizer_ = optimizer
-    if isinstance(optimizer, FP16_Optimizer):
-        optimizer_ = optimizer.optimizer
+    # if isinstance(optimizer, FP16_Optimizer):
+    #     optimizer_ = optimizer.optimizer
     for param_group in optimizer_.param_groups:
         for param in param_group['params']:
             index += 1
@@ -234,7 +234,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler, args, tag=None, b
         if mpu.get_data_parallel_rank() == 0:
             checkpoint_name = get_checkpoint_name(args.save, tag)
             print('global rank {} is saving checkpoint at iteration {:7d} to {}'.
-                  format(torch.distributed.get_rank(), iteration, checkpoint_name))
+                  format(torch.env.get_rank(), iteration, checkpoint_name))
             sd = {'iteration': iteration}
             if args.deepspeed:
                 model = model.module
@@ -269,7 +269,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler, args, tag=None, b
     if barrier:
         torch.distributed.barrier()
     # And update the latest iteration
-    if torch.distributed.get_rank() == 0:
+    if torch.env.get_rank() == 0:
         tracker_filename = get_checkpoint_tracker_filename(args.save)
         with open(tracker_filename, 'w') as f:
             f.write(tag)
@@ -352,7 +352,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, args, no_deepspeed=False, no
 
         if mpu.get_data_parallel_rank() == 0:
             print('global rank {} is loading checkpoint {}'.format(
-                torch.distributed.get_rank(), checkpoint_name))
+                torch.env.get_rank(), checkpoint_name))
 
         # Load the checkpoint.
         sd = torch.load(checkpoint_name, map_location='cpu')

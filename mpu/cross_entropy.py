@@ -31,17 +31,13 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         logits = vocab_parallel_logits.clone()
         # Maximum value along vocab dimension across all GPUs.
         logits_max = torch.max(logits, dim=-1)[0]
-        torch.distributed.all_reduce(logits_max,
-                                     op=torch.distributed.ReduceOp.MAX,
-                                     group=get_model_parallel_group())
+
         # Subtract the maximum value.
         logits.sub_(logits_max.unsqueeze(dim=-1))
         # Sum of exponential of logits along vocab dimension across all GPUs.
         exp_logits = logits.exp()
         sum_exp_logits = exp_logits.sum(dim=-1)
-        torch.distributed.all_reduce(sum_exp_logits,
-                                     op=torch.distributed.ReduceOp.SUM,
-                                     group=get_model_parallel_group())
+   
 
         # Get the partition's vocab indecies
         get_vocab_range = VocabUtility.vocab_range_from_per_partition_vocab_size
@@ -67,10 +63,7 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         predicted_logits = predicted_logits_1d.view_as(target)
         predicted_logits[target_mask] = 0.0
         # All reduce is needed to get the chunks from other GPUs.
-        torch.distributed.all_reduce(predicted_logits,
-                                     op=torch.distributed.ReduceOp.SUM,
-                                     group=get_model_parallel_group())
-
+       
         # Loss = log(sum(exp(logits))) - predicted-logit.
         loss = torch.log(sum_exp_logits) - predicted_logits
 

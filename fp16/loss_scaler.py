@@ -116,9 +116,7 @@ class DynamicLossScaler:
         # Since each model parallel GPU carries only part of the model,
         # make sure overflow flag is synced across all the model parallel GPUs
         overflow_gpu = torch.cuda.ByteTensor([overflow])
-        torch.distributed.all_reduce(overflow_gpu,
-                                     op=torch.distributed.ReduceOp.MAX,
-                                     group=mpu.get_model_parallel_group())
+      
         overflow = overflow_gpu[0].item()
         return bool(overflow)
 

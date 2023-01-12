@@ -4,7 +4,7 @@ from oneflow.optim import Adam
 from torch import distributed as dist
 
 import mpu
-from fp16 import FP16_Module, FP16_Optimizer, DynamicLossScaler
+# from fp16 import FP16_Module, FP16_Optimizer, DynamicLossScaler
 from learning_rates import AnnealingLR
 from model import GLMModel, glm_get_params_for_weight_decay_optimization
 from model import GLMForMultiTokenCloze, GLMForMultiTokenClozeFast, GLMForSingleTokenCloze, GLMForSequenceClassification
@@ -18,15 +18,15 @@ def load_pretrained(model, checkpoint_path, args, task_tokens=None):
     checkpoint_name = get_checkpoint_name(load_dir, tag, release)
     if mpu.get_data_parallel_rank() == 0:
         print('global rank {} is loading pretrained model {}'.format(
-            torch.distributed.get_rank(), checkpoint_name))
+            torch.env.get_rank(), checkpoint_name))
     # Load the checkpoint.
     sd = torch.load(checkpoint_name, map_location='cpu')
     if args.deepspeed:
         model = model.module
     if isinstance(model, TorchDDP):
         model = model.module
-    if isinstance(model, FP16_Module):
-        model = model.module
+    # if isinstance(model, FP16_Module):
+    #     model = model.module
     if hasattr(model, "model"):
         model = model.model
 
@@ -140,8 +140,8 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
     model.cuda(torch.cuda.current_device())
 
     # Fp16 conversion.
-    if args.fp16:
-        model = FP16_Module(model)
+    # if args.fp16:
+    #     model = FP16_Module(model)
 
     # Wrap model for distributed training.
     if not args.deepspeed and (args.train_iters or args.epochs):
@@ -158,7 +158,7 @@ def get_model(args, model_type=None, multi_token=True, num_labels=None, spell_le
 
 def get_optimizer_param_groups(model):
     # Build parameter groups (weight decay and non-decay).
-    while isinstance(model, (LocalDDP, TorchDDP, FP16_Module)):
+    while isinstance(model, (LocalDDP, TorchDDP, )):
         model = model.module
     param_groups = glm_get_params_for_weight_decay_optimization(model)
 
@@ -203,15 +203,15 @@ def get_optimizer(param_groups, args):
         # fp16 wrapper is not required for DeepSpeed.
         # return optimizer
 
-    # Wrap into fp16 optimizer.
-    if args.fp16:
-        optimizer = FP16_Optimizer(optimizer,
-                                   static_loss_scale=args.loss_scale,
-                                   dynamic_loss_scale=args.dynamic_loss_scale,
-                                   dynamic_loss_args={
-                                       'scale_window': args.loss_scale_window,
-                                       'min_scale': args.min_scale,
-                                       'delayed_shift': args.hysteresis})
+    # # Wrap into fp16 optimizer.
+    # if args.fp16:
+    #     optimizer = FP16_Optimizer(optimizer,
+    #                                static_loss_scale=args.loss_scale,
+    #                                dynamic_loss_scale=args.dynamic_loss_scale,
+    #                                dynamic_loss_args={
+    #                                    'scale_window': args.loss_scale_window,
+    #                                    'min_scale': args.min_scale,
+    #                                    'delayed_shift': args.hysteresis})
 
     return optimizer
 
@@ -339,47 +339,47 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
             lm_loss /= args.gradient_accumulation_steps
 
         reduced_loss = lm_loss.detach().clone().view(1)
-        torch.distributed.all_reduce(reduced_loss.data, group=mpu.get_data_parallel_group())
+        # torch.distributed.all_reduce(reduced_loss.data, group=mpu.get_data_parallel_group())
         reduced_loss.data = reduced_loss.data / (args.world_size / args.model_parallel_size)
 
-        if not DynamicLossScaler._has_inf_or_nan(reduced_loss):
-            lm_loss_total += reduced_loss
-            count += 1
+        # if not DynamicLossScaler._has_inf_or_nan(reduced_loss):
+        #     lm_loss_total += reduced_loss
+        #     count += 1
 
-            # Calculate gradients, reduce across processes, and clip.
-            timers('backward').start()
-            backward_step(optimizer, model, lm_loss, args, timers)
-            timers('backward').stop()
-            # print_rank_0("Backward step")
-            # Update parameters.
-            timers('optimizer').start()
-            if args.deepspeed:
-                if model.is_gradient_accumulation_boundary():
-                    model.step()
-                    complete = True
-                    if not (args.fp16 and optimizer.overflow):
-                        lr_scheduler.step()
-                    else:
-                        skipped_iter = 1
-                else:
-                    model.step()
-            else:
-                if count == args.gradient_accumulation_steps:
-                    optimizer.step()
-                    complete = True
-                    # Update learning rate.
-                    if not (args.fp16 and optimizer.overflow):
-                        lr_scheduler.step()
-                    else:
-                        skipped_iter = 1
-            # print_rank_0("Optimizer step")
-            timers('optimizer').stop()
-            if complete:
-                break
-        else:
-            print_rank_0("Found NaN loss, skip backward")
-            del lm_loss, reduced_loss
-            mems = []
+        #     # Calculate gradients, reduce across processes, and clip.
+        #     timers('backward').start()
+        #     backward_step(optimizer, model, lm_loss, args, timers)
+        #     timers('backward').stop()
+        #     # print_rank_0("Backward step")
+        #     # Update parameters.
+        #     timers('optimizer').start()
+        #     if args.deepspeed:
+        #         if model.is_gradient_accumulation_boundary():
+        #             model.step()
+        #             complete = True
+        #             if not (args.fp16 and optimizer.overflow):
+        #                 lr_scheduler.step()
+        #             else:
+        #                 skipped_iter = 1
+        #         else:
+        #             model.step()
+        #     else:
+        #         if count == args.gradient_accumulation_steps:
+        #             optimizer.step()
+        #             complete = True
+        #             # Update learning rate.
+        #             if not (args.fp16 and optimizer.overflow):
+        #                 lr_scheduler.step()
+        #             else:
+        #                 skipped_iter = 1
+        #     # print_rank_0("Optimizer step")
+        #     timers('optimizer').stop()
+        #     if complete:
+        #         break
+        # else:
+        #     print_rank_0("Found NaN loss, skip backward")
+        #     del lm_loss, reduced_loss
+        #     mems = []
         if single_step:
             break
     if args.deepspeed:

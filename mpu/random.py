@@ -23,8 +23,8 @@
 import contextlib
 import oneflow.distributed as dist
 import oneflow as torch
-from torch import _C
-from oneflow.cuda import _lazy_call, device as device_ctx_manager
+from oneflow import _C
+# from oneflow.cuda import _lazy_call, device as device_ctx_manager
 #from oneflow.utils.checkpoint import detach_variable
 
 
@@ -112,7 +112,7 @@ def _set_cuda_rng_state(new_state, device=-1):
             default_generator = torch.cuda.default_generators[idx]
             default_generator.set_state(new_state)
 
-    _lazy_call(cb)
+    # _lazy_call(cb)
 
 
 
@@ -218,11 +218,11 @@ def model_parallel_cuda_manual_seed(seed):
     # Data parallel gets the original sedd.
     data_parallel_seed = seed
 
-    if torch.distributed.get_rank() == 0:
+    if torch.env.get_rank() == 0:
         print('> initializing model parallel cuda seeds on global rank {}, '
               'model parallel rank {}, and data parallel rank {} with '
               'model parallel seed: {} and data parallel seed: {}'.format(
-                  torch.distributed.get_rank(), get_model_parallel_rank(),
+                  torch.env.get_rank(), get_model_parallel_rank(),
                   get_data_parallel_rank(), model_parallel_seed,
                   data_parallel_seed), flush=True)
     _CUDA_RNG_STATE_TRACKER.reset()
