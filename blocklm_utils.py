@@ -1,5 +1,5 @@
-import oneflow  as flow
-import oneflow.utils.data
+import torch
+import torch.utils.data
 import mpu
 import random
 import copy
@@ -33,16 +33,14 @@ class ConstructBlockStrategy:
                  max_block_length=40, block_mask_prob=0.0, context_mask_ratio=0.0, context_mask_range=3,
                  short_seq_prob=0.0, single_span_prob=0.0, block_position_encoding=True, encoder_decoder=False,
                  shuffle_blocks=True, sentinel_token=False, task_mask=False, random_position=False, masked_lm=False):
-        self.args = args
         self.eod_token = args.eod_token
         self.tokenizer = tokenizer
         self.count = 0
         self.max_seq_length = max_seq_length
-        # TODO(rank&work_size)
-        # self.rank = mpu.get_data_parallel_rank()
-        # self.world_size = mpu.get_data_parallel_world_size()
-        self.rank = 0
-        self.world_size = 1
+        self.rank = mpu.get_data_parallel_rank()
+        self.world_size = mpu.get_data_parallel_world_size()
+        # self.rank = 0
+        # self.world_size = 1
         assert 0.0 <= bert_prob <= 1.0
         self.bert_prob = bert_prob
         self.gap_sentence_prob = gap_sentence_prob
@@ -312,12 +310,11 @@ class ConstructBlockStrategy:
         return new_samples
 
     def construct_blocks(self, samples):
-        # worker_info = flow.utils.data.get_worker_info()
-        # if worker_info is not None:
-        #     worker_id, num_workers = worker_info.id, worker_info.num_workers
-        # else:
-        #     worker_id, num_workers = 0, 1
-        worker_id, num_workers = 0, 1
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is not None:
+            worker_id, num_workers = worker_info.id, worker_info.num_workers
+        else:
+            worker_id, num_workers = 0, 1
         rng = random.Random((self.count * num_workers + worker_id) * self.world_size + self.rank)
         self.count += 1
         token_batch, target_batch, loss_mask_batch, position_id_batch = [], [], [], []
@@ -376,7 +373,7 @@ class ConstructBlockStrategy:
                         last_index = i + 1
                 if last_index < len(tokens):
                     sentence_spans.append((last_index, len(tokens)))
-                if not sentence_spans and flow.env.get_rank() == 0:
+                if not sentence_spans and torch.distributed.get_rank() == 0:
                     try:
                         print(self.tokenizer.DecodeIds(tokens[1:]))
                     except IndexError:
@@ -445,32 +442,33 @@ class ConstructBlockStrategy:
                         print(sample, generation_length, multiple_doc)
         if self.encoder_decoder:
             return {
-                'text': flow.tensor(source_batch, dtype=flow.long),
-                'target': flow.tensor(target_batch, dtype=flow.long),
-                'loss_mask': flow.tensor(loss_mask_batch, dtype=flow.long)}
+                'text': torch.tensor(source_batch, dtype=torch.long),
+                'target': torch.tensor(target_batch, dtype=torch.long),
+                'loss_mask': torch.tensor(loss_mask_batch, dtype=torch.long)}
         else:
             token_batch, target_batch, loss_mask_batch, position_id_batch = self.pad_batch(token_batch, target_batch,
                                                                                            loss_mask_batch,
                                                                                            position_id_batch)
-            return {'text': flow.tensor(token_batch, dtype=flow.long),
-                    'target': flow.tensor(target_batch, dtype=flow.long),
-                    'loss_mask': flow.tensor(loss_mask_batch, dtype=flow.long),
-                    'position_id': flow.tensor(position_id_batch, dtype=flow.long),
-                    'attention_mask': flow.tensor(attention_mask, dtype=flow.long),
+            return {'text': torch.tensor(token_batch, dtype=torch.long),
+                    'target': torch.tensor(target_batch, dtype=torch.long),
+                    'loss_mask': torch.tensor(loss_mask_batch, dtype=torch.long),
+                    'position_id': torch.tensor(position_id_batch, dtype=torch.long),
+                    'attention_mask': torch.tensor(attention_mask, dtype=torch.long),
                     'mode': mode}
 
-    def pad_batch(self,token_batch, target_batch, loss_mask_batch, position_id_batch):
+    @staticmethod
+    def pad_batch(token_batch, target_batch, loss_mask_batch, position_id_batch):
         seq_lengths = list(map(len, token_batch))
-        # if seq_lengths.count(seq_lengths[0]) != len(seq_lengths):
-        max_length = int(self.args.seq_length*1.3)
-        token_batch = [np.concatenate((tokens, np.zeros(max_length - len(tokens), dtype=np.long))) for tokens in
-                        token_batch]
-        target_batch = [np.concatenate((targets, np.zeros(max_length - len(targets), dtype=np.long))) for
-                        targets in
-                        target_batch]
-        loss_mask_batch = [np.concatenate((loss_masks, np.zeros(max_length - len(loss_masks), dtype=np.long)))
-                            for loss_masks in loss_mask_batch]
-        position_id_batch = [
-            np.concatenate((position_ids, np.zeros((2, max_length - position_ids.shape[1]), dtype=np.long)),
-                            axis=1) for position_ids in position_id_batch]
+        if seq_lengths.count(seq_lengths[0]) != len(seq_lengths):
+            max_length = max(seq_lengths)
+            token_batch = [np.concatenate((tokens, np.zeros(max_length - len(tokens), dtype=np.long))) for tokens in
+                           token_batch]
+            target_batch = [np.concatenate((targets, np.zeros(max_length - len(targets), dtype=np.long))) for
+                            targets in
+                            target_batch]
+            loss_mask_batch = [np.concatenate((loss_masks, np.zeros(max_length - len(loss_masks), dtype=np.long)))
+                               for loss_masks in loss_mask_batch]
+            position_id_batch = [
+                np.concatenate((position_ids, np.zeros((2, max_length - position_ids.shape[1]), dtype=np.long)),
+                               axis=1) for position_ids in position_id_batch]
         return token_batch, target_batch, loss_mask_batch, position_id_batch

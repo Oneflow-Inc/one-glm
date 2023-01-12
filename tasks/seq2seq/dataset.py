@@ -3,8 +3,8 @@ import json
 import random
 import string
 import unidecode
-import oneflow  as flow
-import oneflow.utils.data
+import torch
+import torch.utils.data
 import numpy as np
 from tasks.data_utils import InputExample
 from tqdm import tqdm
@@ -417,7 +417,7 @@ class XSumProcessor:
         return example_list
 
 
-class Seq2SeqDataset(flow.utils.data.Dataset):
+class Seq2SeqDataset(torch.utils.data.Dataset):
     def __init__(self, args, split, tokenizer):
         self.args = args
         self.task, self.data_dir = args.task.lower(), args.data_dir
@@ -550,7 +550,7 @@ class Seq2SeqDataset(flow.utils.data.Dataset):
         return sample
 
 
-class ExtractionDataset(flow.utils.data.Dataset):
+class ExtractionDataset(torch.utils.data.Dataset):
     def __init__(self, args, split, tokenizer):
         self.args = args
         task, data_dir = args.task.lower(), args.data_dir
@@ -648,7 +648,7 @@ class ExtractionDataset(flow.utils.data.Dataset):
         return sample
 
 
-class BlankLMDataset(flow.utils.data.Dataset):
+class BlankLMDataset(torch.utils.data.Dataset):
     def __init__(self, args, split, tokenizer):
         self.args = args
         task, data_dir = args.task.lower(), args.data_dir
@@ -776,7 +776,7 @@ class BlankLMDataset(flow.utils.data.Dataset):
         return masked_src, masked_tgt
 
 
-class CustomizationDataset(flow.utils.data.Dataset):
+class CustomizationDataset(torch.utils.data.Dataset):
     def __init__(self, args, split, tokenizer):
         self.args = args
         task, data_dir = args.task.lower(), args.data_dir

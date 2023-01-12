@@ -20,8 +20,8 @@ import time
 import numpy as np
 from itertools import accumulate
 
-import oneflow  as flow
-from oneflow.multiprocessing import Lock
+import torch
+from torch.multiprocessing import Lock
 
 
 def get_lazy_path(path):

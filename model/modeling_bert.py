@@ -27,12 +27,12 @@ import tarfile
 import tempfile
 import shutil
 
-import oneflow  as flow
+import torch
 from torch import nn
-import oneflow.nn.functional as F
-from oneflow.nn import CrossEntropyLoss
+import torch.nn.functional as F
+from torch.nn import CrossEntropyLoss
 
-# from oneflow.utils.checkpoint import checkpoint
+# from torch.utils.checkpoint import checkpoint
 
 from data_utils.file_utils import cached_path
 
@@ -41,7 +41,7 @@ import mpu
 
 def normal_init_method(mean, std):
     def init_(tensor):
-        return flow.nn.init.normal_(tensor, mean=mean, std=std)
+        return torch.nn.init.normal_(tensor, mean=mean, std=std)
 
     return init_
 
@@ -51,7 +51,7 @@ def scaled_init_method(mean, std, num_layers):
     std = std / math.sqrt(2.0 * num_layers)
 
     def init_(tensor):
-        return flow.nn.init.normal_(tensor, mean=mean, std=std)
+        return torch.nn.init.normal_(tensor, mean=mean, std=std)
 
     return init_
 
@@ -144,23 +144,23 @@ def load_tf_weights_in_bert(model, tf_checkpoint_path):
             e.args += (pointer.shape, array.shape)
             raise
         print("Initialize PyTorch weight {}".format(name))
-        pointer.data = flow.from_numpy(array)
+        pointer.data = torch.from_numpy(array)
     return model
 
 
 def gelu(x):
     """Implementation of the gelu activation function.
         For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
-        0.5 * x * (1 + flow.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * flow.pow(x, 3))))
+        0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
     """
-    return x * 0.5 * (1.0 + flow.erf(x / math.sqrt(2.0)))
+    return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
 
 def swish(x):
-    return x * flow.sigmoid(x)
+    return x * torch.sigmoid(x)
 
 
-ACT2FN = {"gelu": gelu, "relu": flow.nn.functional.relu, "swish": swish}
+ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish}
 
 
 class BertConfig(object):
@@ -273,14 +273,14 @@ except ImportError:
             """Construct a layernorm module in the TF style (epsilon inside the square root).
             """
             super(BertLayerNorm, self).__init__()
-            self.weight = nn.Parameter(flow.ones(hidden_size))
-            self.bias = nn.Parameter(flow.zeros(hidden_size))
+            self.weight = nn.Parameter(torch.ones(hidden_size))
+            self.bias = nn.Parameter(torch.zeros(hidden_size))
             self.variance_epsilon = eps
 
         def forward(self, x):
             u = x.mean(-1, keepdim=True)
             s = (x - u).pow(2).mean(-1, keepdim=True)
-            x = (x - u) / flow.sqrt(s + self.variance_epsilon)
+            x = (x - u) / torch.sqrt(s + self.variance_epsilon)
             return self.weight * x + self.bias
 
 
@@ -308,10 +308,10 @@ class BertEmbeddings(nn.Module):
 
     def forward(self, input_ids, token_type_ids=None):
         seq_length = input_ids.size(1)
-        position_ids = flow.arange(seq_length, dtype=flow.long, device=input_ids.device)
+        position_ids = torch.arange(seq_length, dtype=torch.long, device=input_ids.device)
         position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         if token_type_ids is None:
-            token_type_ids = flow.zeros_like(input_ids)
+            token_type_ids = torch.zeros_like(input_ids)
 
         words_embeddings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
@@ -379,7 +379,7 @@ class BertSelfAttention(nn.Module):
         value_layer = self.transpose_for_scores(mixed_value_layer)
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = flow.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
@@ -392,7 +392,7 @@ class BertSelfAttention(nn.Module):
         attention_probs = self.dropout(attention_probs)
 
         previous_type = attention_probs.type()
-        context_layer = flow.matmul(attention_probs, value_layer)
+        context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
@@ -619,7 +619,7 @@ class BertLMPredictionHead(nn.Module):
                                 bert_model_embedding_weights.size(0),
                                 bias=False)
         # self.decoder_weight = bert_model_embedding_weights
-        # self.bias = nn.Parameter(flow.zeros(bert_model_embedding_weights.size(0)))
+        # self.bias = nn.Parameter(torch.zeros(bert_model_embedding_weights.size(0)))
         # self.bias.model_parallel = True
         self.fp32_embedding = config.fp32_embedding
         self.fp32_layernorm = config.fp32_layernorm
@@ -784,7 +784,7 @@ class PreTrainedBertModel(nn.Module):
         model = cls(config, *inputs, **kwargs)
         if state_dict is None:
             weights_path = os.path.join(serialization_dir, WEIGHTS_NAME)
-            state_dict = flow.load(weights_path)
+            state_dict = torch.load(weights_path)
 
         old_keys = []
         new_keys = []
@@ -837,13 +837,13 @@ class BertModel(PreTrainedBertModel):
         config: a BertConfig class instance with the configuration to build a new model
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, sequence_length] with the token
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
             types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
             a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
@@ -853,19 +853,19 @@ class BertModel(PreTrainedBertModel):
         `encoded_layers`: controled by `output_all_encoded_layers` argument:
             - `output_all_encoded_layers=True`: outputs a list of the full sequences of encoded-hidden-states at the end
                 of each attention block (i.e. 12 full sequences for BERT-base, 24 for BERT-large), each
-                encoded-hidden-state is a flow.FloatTensor of size [batch_size, sequence_length, hidden_size],
+                encoded-hidden-state is a torch.FloatTensor of size [batch_size, sequence_length, hidden_size],
             - `output_all_encoded_layers=False`: outputs only the full sequence of hidden-states corresponding
                 to the last attention block of shape [batch_size, sequence_length, hidden_size],
-        `pooled_output`: a flow.FloatTensor of size [batch_size, hidden_size] which is the output of a
+        `pooled_output`: a torch.FloatTensor of size [batch_size, hidden_size] which is the output of a
             classifier pretrained on top of the hidden state associated to the first character of the
             input (`CLF`) to train on the Next-Sentence task (see BERT's paper).
 
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = flow.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = flow.LongTensor([[0, 0, 1], [0, 1, 0]])
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
 
     config = modeling.BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
@@ -885,9 +885,9 @@ class BertModel(PreTrainedBertModel):
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, output_all_encoded_layers=True,
                 checkpoint_activations=False):
         if attention_mask is None:
-            attention_mask = flow.ones_like(input_ids)
+            attention_mask = torch.ones_like(input_ids)
         if token_type_ids is None:
-            token_type_ids = flow.zeros_like(input_ids)
+            token_type_ids = torch.zeros_like(input_ids)
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -932,20 +932,20 @@ class BertForPreTraining(PreTrainedBertModel):
         config: a BertConfig class instance with the configuration to build a new model.
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, sequence_length] with the token
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
             types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
             a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
-        `masked_lm_labels`: masked language modeling labels: flow.LongTensor of shape [batch_size, sequence_length]
+        `masked_lm_labels`: masked language modeling labels: torch.LongTensor of shape [batch_size, sequence_length]
             with indices selected in [-1, 0, ..., vocab_size]. All labels set to -1 are ignored (masked), the loss
             is only computed for the labels set in [0, ..., vocab_size]
-        `next_sentence_label`: next sentence classification loss: flow.LongTensor of shape [batch_size]
+        `next_sentence_label`: next sentence classification loss: torch.LongTensor of shape [batch_size]
             with indices selected in [0, 1].
             0 => next sentence is the continuation, 1 => next sentence is a random sentence.
 
@@ -961,9 +961,9 @@ class BertForPreTraining(PreTrainedBertModel):
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = flow.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = flow.LongTensor([[0, 0, 1], [0, 1, 0]])
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
 
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
@@ -1005,17 +1005,17 @@ class BertForMaskedLM(PreTrainedBertModel):
         config: a BertConfig class instance with the configuration to build a new model.
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, sequence_length] with the token
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
             types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
             a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
-        `masked_lm_labels`: masked language modeling labels: flow.LongTensor of shape [batch_size, sequence_length]
+        `masked_lm_labels`: masked language modeling labels: torch.LongTensor of shape [batch_size, sequence_length]
             with indices selected in [-1, 0, ..., vocab_size]. All labels set to -1 are ignored (masked), the loss
             is only computed for the labels set in [0, ..., vocab_size]
 
@@ -1028,9 +1028,9 @@ class BertForMaskedLM(PreTrainedBertModel):
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = flow.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = flow.LongTensor([[0, 0, 1], [0, 1, 0]])
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
 
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
@@ -1068,17 +1068,17 @@ class BertForNextSentencePrediction(PreTrainedBertModel):
         config: a BertConfig class instance with the configuration to build a new model.
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, sequence_length] with the token
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
             types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
             a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
-        `next_sentence_label`: next sentence classification loss: flow.LongTensor of shape [batch_size]
+        `next_sentence_label`: next sentence classification loss: torch.LongTensor of shape [batch_size]
             with indices selected in [0, 1].
             0 => next sentence is the continuation, 1 => next sentence is a random sentence.
 
@@ -1092,9 +1092,9 @@ class BertForNextSentencePrediction(PreTrainedBertModel):
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = flow.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = flow.LongTensor([[0, 0, 1], [0, 1, 0]])
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
 
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
@@ -1134,17 +1134,17 @@ class BertForSequenceClassification(PreTrainedBertModel):
         `num_labels`: the number of classes for the classifier. Default = 2.
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, sequence_length] with the token
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
             types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
             a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
-        `labels`: labels for the classification output: flow.LongTensor of shape [batch_size]
+        `labels`: labels for the classification output: torch.LongTensor of shape [batch_size]
             with indices selected in [0, ..., num_labels].
 
     Outputs:
@@ -1156,9 +1156,9 @@ class BertForSequenceClassification(PreTrainedBertModel):
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = flow.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = flow.LongTensor([[0, 0, 1], [0, 1, 0]])
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
 
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
@@ -1202,17 +1202,17 @@ class BertForMultipleChoice(PreTrainedBertModel):
         `num_choices`: the number of classes for the classifier. Default = 2.
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, num_choices, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, num_choices, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, num_choices, sequence_length]
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, num_choices, sequence_length]
             with the token types indices selected in [0, 1]. Type 0 corresponds to a `sentence A`
             and type 1 corresponds to a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, num_choices, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, num_choices, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
-        `labels`: labels for the classification output: flow.LongTensor of shape [batch_size]
+        `labels`: labels for the classification output: torch.LongTensor of shape [batch_size]
             with indices selected in [0, ..., num_choices].
 
     Outputs:
@@ -1224,9 +1224,9 @@ class BertForMultipleChoice(PreTrainedBertModel):
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[[31, 51, 99], [15, 5, 0]], [[12, 16, 42], [14, 28, 57]]])
-    input_mask = flow.LongTensor([[[1, 1, 1], [1, 1, 0]],[[1,1,0], [1, 0, 0]]])
-    token_type_ids = flow.LongTensor([[[0, 0, 1], [0, 1, 0]],[[0, 1, 1], [0, 0, 1]]])
+    input_ids = torch.LongTensor([[[31, 51, 99], [15, 5, 0]], [[12, 16, 42], [14, 28, 57]]])
+    input_mask = torch.LongTensor([[[1, 1, 1], [1, 1, 0]],[[1,1,0], [1, 0, 0]]])
+    token_type_ids = torch.LongTensor([[[0, 0, 1], [0, 1, 0]],[[0, 1, 1], [0, 0, 1]]])
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
 
@@ -1273,17 +1273,17 @@ class BertForTokenClassification(PreTrainedBertModel):
         `num_labels`: the number of classes for the classifier. Default = 2.
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, sequence_length] with the token
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
             types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
             a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
-        `labels`: labels for the classification output: flow.LongTensor of shape [batch_size]
+        `labels`: labels for the classification output: torch.LongTensor of shape [batch_size]
             with indices selected in [0, ..., num_labels].
 
     Outputs:
@@ -1295,9 +1295,9 @@ class BertForTokenClassification(PreTrainedBertModel):
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = flow.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = flow.LongTensor([[0, 0, 1], [0, 1, 0]])
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
 
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
@@ -1349,20 +1349,20 @@ class BertForQuestionAnswering(PreTrainedBertModel):
         `config`: a BertConfig class instance with the configuration to build a new model.
 
     Inputs:
-        `input_ids`: a flow.LongTensor of shape [batch_size, sequence_length]
+        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
             `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional flow.LongTensor of shape [batch_size, sequence_length] with the token
+        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
             types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
             a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional flow.LongTensor of shape [batch_size, sequence_length] with indices
+        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
             selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
             input sequence length in the current batch. It's the mask that we typically use for attention when
             a batch has varying length sentences.
-        `start_positions`: position of the first token for the labeled span: flow.LongTensor of shape [batch_size].
+        `start_positions`: position of the first token for the labeled span: torch.LongTensor of shape [batch_size].
             Positions are clamped to the length of the sequence and position outside of the sequence are not taken
             into account for computing the loss.
-        `end_positions`: position of the last token for the labeled span: flow.LongTensor of shape [batch_size].
+        `end_positions`: position of the last token for the labeled span: torch.LongTensor of shape [batch_size].
             Positions are clamped to the length of the sequence and position outside of the sequence are not taken
             into account for computing the loss.
 
@@ -1376,9 +1376,9 @@ class BertForQuestionAnswering(PreTrainedBertModel):
     Example usage:
     ```python
     # Already been converted into WordPiece token ids
-    input_ids = flow.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = flow.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = flow.LongTensor([[0, 0, 1], [0, 1, 0]])
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
 
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)

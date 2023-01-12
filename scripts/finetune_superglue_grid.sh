@@ -21,7 +21,7 @@ do
   PER_GPU_BS=$(($BATCH_SIZE/$N_GPU))
   if [ ! -f runs/${EXPERIMENT_NAME}/${HYPER}/test_results.json ]; then
     echo runs/${EXPERIMENT_NAME}/${HYPER}
-    python -m flow.distributed.launch $DISTRIBUTED_ARGS finetune_gpt2.py \
+    python -m torch.distributed.launch $DISTRIBUTED_ARGS finetune_gpt2.py \
        --finetune \
        --experiment-name ${EXPERIMENT_NAME}/${HYPER} \
        --task ${TASK_NAME} \

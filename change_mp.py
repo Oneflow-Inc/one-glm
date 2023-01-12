@@ -1,6 +1,6 @@
 import sys
 import os
-import oneflow  as flow
+import torch
 import copy
 
 checkpoint = sys.argv[1]
@@ -65,7 +65,7 @@ if target_mp < len(filenames):
     for i in range(target_mp):
         start = ratio * i
         end = ratio * (i + 1)
-        d = flow.load(filenames[start],
+        d = torch.load(filenames[start],
                        map_location='cpu')
         for k in d.keys():
             if k != 'module':
@@ -76,7 +76,7 @@ if target_mp < len(filenames):
                 else:
                     d[k] = None
         for j in range(start + 1, end):
-            d_new = flow.load(filenames[j],
+            d_new = torch.load(filenames[j],
                                map_location='cpu')
             for k, v in d_new['module'].items():
                 assert len(v.shape) < 3
@@ -85,26 +85,26 @@ if target_mp < len(filenames):
                         size_1 = d['module'][k].shape[0] // 3
                         size_2 = v.shape[0] // 3
                         target = d['module'][k]
-                        d['module'][k] = flow.cat([
+                        d['module'][k] = torch.cat([
                             target[:size_1, :], v[:size_2, :],
                             target[size_1:size_1 * 2, :], v[size_2:size_2 * 2, :],
                             target[size_1 * 2:, :], v[size_2 * 2:, :]], 0)
                     elif 'word' in k or 'h_to_4h' in k or 'relative' in k or "r_w_bias" in k or "r_r_bias" in k:
-                        d['module'][k] = flow.cat([d['module'][k], v], 0)
+                        d['module'][k] = torch.cat([d['module'][k], v], 0)
                     else:
-                        d['module'][k] = flow.cat([d['module'][k], v], 1)
+                        d['module'][k] = torch.cat([d['module'][k], v], 1)
                 elif len(v.shape) == 1 and 'query_key_value' in k:
                     size_1 = d['module'][k].shape[0] // 3
                     size_2 = v.shape[0] // 3
                     target = d['module'][k]
-                    d['module'][k] = flow.cat([
+                    d['module'][k] = torch.cat([
                         target[:size_1], v[:size_2],
                         target[size_1:size_1 * 2], v[size_2:size_2 * 2],
                         target[size_1 * 2:], v[size_2 * 2:]], 0)
                 elif len(v.shape) == 1 and ('dense_h_to_4h' in k or "attention.relative" in k):
-                    d['module'][k] = flow.cat([d['module'][k], v], 0)
+                    d['module'][k] = torch.cat([d['module'][k], v], 0)
         filename = os.path.join(new_checkpoint, "mp_rank_{:02d}_model_states.pt".format(i))
-        flow.save(d, filename)
+        torch.save(d, filename)
 
 if target_mp > len(filenames):
     print("Increase MP size.")
@@ -113,7 +113,7 @@ if target_mp > len(filenames):
     for i in range(len(filenames)):
         start = ratio * i
         end = ratio * (i + 1)
-        d = flow.load(filenames[i],
+        d = torch.load(filenames[i],
                        map_location='cpu')
         for j in range(start, end):
             d_new = {}
@@ -127,13 +127,13 @@ if target_mp > len(filenames):
                     else:
                         d_new[k] = None
             d_new['module'] = {}
-            with flow.no_grad():
+            with torch.no_grad():
                 for k, v in d['module'].items():
                     assert len(v.shape) < 3
                     if len(v.shape) == 2 and 'position' not in k:
                         if 'query' in k:
                             part = v.shape[0] // ratio // 3
-                            d_new['module'][k] = flow.cat([v[shift * part:(shift + 1) * part, :].clone(),
+                            d_new['module'][k] = torch.cat([v[shift * part:(shift + 1) * part, :].clone(),
                                                             v[(shift + ratio) * part:(shift + 1 + ratio) * part,
                                                             :].clone(),
                                                             v[(shift + 2 * ratio) * part:(shift + 1 + 2 * ratio) * part,
@@ -149,11 +149,11 @@ if target_mp > len(filenames):
                         d_new['module'][k] = v[shift * part:(shift + 1) * part].clone()
                     elif len(v.shape) == 1 and 'query_key_value' in k:
                         part = v.shape[0] // ratio // 3
-                        d_new['module'][k] = flow.cat(
+                        d_new['module'][k] = torch.cat(
                             [v[shift * part:(shift + 1) * part].clone(),
                              v[(shift + ratio) * part:(shift + 1 + ratio) * part].clone(),
                              v[(shift + 2 * ratio) * part:(shift + 1 + 2 * ratio) * part].clone()], 0)
                     else:
                         d_new['module'][k] = v.clone()
             filename = os.path.join(new_checkpoint, "mp_rank_{:02d}_model_states.pt".format(j))
-            flow.save(d_new, filename)
+            torch.save(d_new, filename)

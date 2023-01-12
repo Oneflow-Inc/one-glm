@@ -21,11 +21,11 @@ import os
 import random
 import math
 
-import oneflow.distributed
+import torch.distributed
 from filelock import FileLock
 import numpy as np
-import oneflow as flow
-import time
+import torch
+
 import deepspeed
 from contextlib import ExitStack
 from arguments import get_args
@@ -41,7 +41,7 @@ from utils import report_memory
 from utils import print_and_save_args
 from utils import print_rank_0
 from utils import get_sample_writer, get_log_dir, get_hostname
-import oneflow.distributed as dist
+import torch.distributed as dist
 
 
 def get_masks_and_position_ids(data,
@@ -58,29 +58,25 @@ def get_masks_and_position_ids(data,
     # Attention mask (lower triangular).
     if mem_length:
         if attention_mask is None:
-            attention_mask = flow.ones(
-                (1, seq_length, seq_length + mem_length), device=data.device)
-        attention_mask = flow.tril(
-            flow.triu(attention_mask, 1 - seq_length + mem_length), mem_length)
+            attention_mask = torch.ones((1, seq_length, seq_length + mem_length), device=data.device)
+        attention_mask = torch.tril(torch.triu(attention_mask, 1 - seq_length + mem_length), mem_length)
     else:
         if reset_attention_mask:
             att_mask_batch = batch_size
         else:
             att_mask_batch = 1
         if attention_mask is None:
-            attention_mask = flow.ones(
-                (att_mask_batch, seq_length, seq_length), device=data.device)
-        attention_mask = flow.tril(attention_mask)
+            attention_mask = torch.ones((att_mask_batch, seq_length, seq_length), device=data.device)
+        attention_mask = torch.tril(attention_mask)
     attention_mask = attention_mask.unsqueeze(1)
 
     # Loss mask.
     if loss_mask is None:
-        loss_mask = flow.ones(
-            data.size(), dtype=flow.float, device=data.device)
+        loss_mask = torch.ones(data.size(), dtype=torch.float, device=data.device)
 
     # Position ids.
-    position_ids = flow.arange(seq_length, dtype=flow.long,
-                               device=data.device)
+    position_ids = torch.arange(seq_length, dtype=torch.long,
+                                device=data.device)
     position_ids = position_ids.unsqueeze(0).expand_as(data)
     if set_loss_mask:
         loss_mask[data == eod_token] = 0.0
@@ -115,7 +111,7 @@ def get_masks_and_position_ids(data,
 
 def get_two_batch(data, args):
     keys = ['text', 'target', 'loss_mask']
-    datatype = flow.int64
+    datatype = torch.int64
     # Broadcast data.
     data_b = mpu.broadcast_data(keys, data, datatype)
     source_tokens = data_b['text'].long()
@@ -164,7 +160,7 @@ def get_batch(data, args):
         keys += ['target', 'attention_mask']
     if args.block_lm:
         keys += ['position_id']
-    datatype = flow.int64
+    datatype = torch.int64
 
     # Broadcast data.
     data_b = mpu.broadcast_data(keys, data, datatype)
@@ -208,60 +204,80 @@ def get_batch(data, args):
 tokenizer = None
 
 
-def forward_step_graph(args,data,model):
-    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
-        data, args)
-    placement = flow.env.all_device_placement("cuda")
-    sbp = flow.sbp.split(0)
-    tokens = tokens.to_global(placement=placement, sbp=sbp)
-    position_ids = position_ids.to_global(placement=placement, sbp=sbp)
-    attention_mask = attention_mask.to_global(
-        placement=placement, sbp=sbp)
-    labels = labels.to_global(placement=placement, sbp=sbp)  
-    loss_mask = loss_mask.to_global(placement=placement, sbp=sbp)
-    loss = model(tokens, position_ids, attention_mask, labels, loss_mask)
-    return loss
-
-
-def forward_step_eager(args,data,model):
-    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
-        data, args)
-    logits = model(tokens, position_ids, attention_mask)[0]
-    losses = flow._C.sparse_softmax_cross_entropy(logits, labels)
-    loss_mask = loss_mask.view((-1,))
-    loss = flow.sum(losses.view((-1,)) * loss_mask)
-    if loss_mask.sum().item() > 0:
-        loss = loss / loss_mask.sum()
-    return loss 
-
 def forward_step(data_iterator, model, args, timers, mems):
     """Forward step."""
 
     # Get the batch.
-    data = next(data_iterator[0]) if data_iterator[0] else None
-    # True
-    mode = 'bert' if (data is None and "mode" in data) else data['mode']
+    timers('batch generator').start()
+    timers('data loader').start()
+    rand = random.Random(args.iteration * mpu.get_data_parallel_world_size() + mpu.get_data_parallel_rank())
+    if data_iterator[1] and rand.random() < args.multi_task_ratio:
+        data = next(data_iterator[1]) if data_iterator[1] else None
+        data["mode"] = "multi-task"
+    else:
+        data = next(data_iterator[0]) if data_iterator[0] else None
+    # print_rank_0("data iterator")
+    timers('data loader').stop()
+    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data, args)
+    timers('batch generator').stop()
 
-    if isinstance(model, flow.nn.Graph):
-        loss = forward_step_graph(args,data,model)
-    else :
-        loss = forward_step_eager(args,data,model)
-    
-    with open(args.loss_txt_path,'a') as f:
-        f.write(str(loss.item())+'\n')
+    # print_rank_0("get batch")
+
+    def print_masked_text(batch_id):
+        block_position_ids = position_ids[:, 1]
+        position_ids_ = position_ids[:, 0]
+        sep = attention_mask.item() if torch.numel(attention_mask) == 1 else attention_mask[batch_id].item()
+        text, last_segment = "", []
+        for i, token_id in enumerate(tokens[batch_id, :sep].tolist()):
+            token = tokenizer.IdToToken(token_id)
+            if token.startswith('[MASK') or token.endswith('MASK]'):
+                if last_segment:
+                    text += tokenizer.DecodeIds(last_segment)
+                    last_segment = []
+                text += f" [{position_ids_[batch_id, i].item()}, {token}]"
+            else:
+                last_segment.append(token_id)
+        if last_segment:
+            text += tokenizer.DecodeIds(last_segment)
+        print(text.encode('utf-8'))
+        last_index = None
+        for i in range(sep, tokens.size(1)):
+            if tokenizer.IdToToken(tokens[batch_id, i].item()).startswith("<|startofpiece"):
+                if last_index is not None:
+                    print(tokenizer.DecodeIds(tokens[batch_id, last_index: i].tolist()).encode('utf-8'), "|",
+                          tokenizer.DecodeIds(labels[batch_id, last_index: i].tolist()).encode('utf-8'),
+                          position_ids_[batch_id, last_index: i].tolist(),
+                          block_position_ids[batch_id, last_index:i].tolist())
+                last_index = i
+        if last_index is not None:
+            print(tokenizer.DecodeIds(tokens[batch_id, last_index:].tolist()).encode('utf-8'), "|",
+                  tokenizer.DecodeIds(labels[batch_id, last_index:].tolist()).encode('utf-8'),
+                  position_ids_[batch_id, last_index:].tolist(), block_position_ids[batch_id, last_index:].tolist())
+
+    if data is not None and "mode" in data:
+        mode = data['mode']
+    else:
+        mode = 'bert'
+
+    logits, *mems = model(tokens, position_ids, attention_mask, *mems)
+    losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(),
+                                              labels)
+    loss_mask = loss_mask.view(-1)
+    loss = torch.sum(losses.view(-1) * loss_mask)
+    if loss_mask.sum().item() > 0:
+        loss = loss / loss_mask.sum()
+
     return loss, mems, mode
-   
 
 
 def report_iteration_metrics(summary_writer, optimizer, lr, loss, elapsed_time, step, total_step, args):
     log_string = ' iteration {:8d}/{:8d} |'.format(step, total_step)
-    log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(
-        elapsed_time)
+    log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(elapsed_time)
     log_string += ' learning rate {:.3E} |'.format(lr)
     log_string += ' lm loss {:.6E} |'.format(loss)
-    # if args.fp16:
-    #     log_string += ' loss scale {:.1f} |'.format(
-    #         optimizer.cur_scale if args.deepspeed else optimizer.loss_scale)
+    if args.fp16:
+        log_string += ' loss scale {:.1f} |'.format(
+            optimizer.cur_scale if args.deepspeed else optimizer.loss_scale)
     print_rank_0(log_string)
     if summary_writer is not None:
         summary_writer.add_scalar(f'Train/lr', lr, step)
@@ -292,75 +308,19 @@ def report_evaluate_metrics(summary_writer, prefix, loss, ppl, gpt_loss, bert_lo
         if gpt_loss != 0:
             summary_writer.add_scalar(f'Train/valid_gpt_loss', gpt_loss, step)
         if bert_loss != 0:
-            summary_writer.add_scalar(
-                f'Train/valid_bert_loss', bert_loss, step)
+            summary_writer.add_scalar(f'Train/valid_bert_loss', bert_loss, step)
         if sent_loss != 0:
-            summary_writer.add_scalar(
-                f'Train/valid_sent_loss', sent_loss, step)
+            summary_writer.add_scalar(f'Train/valid_sent_loss', sent_loss, step)
         if multi_loss != 0:
-            summary_writer.add_scalar(
-                f'Train/valid_multi_loss', multi_loss, step)
+            summary_writer.add_scalar(f'Train/valid_multi_loss', multi_loss, step)
 
-def train_test_speed(train_data_iterator, model, args, optimizer, lr_scheduler,timers):
-    count = 0
-    LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
-    RANK = int(os.getenv("RANK", -1))
-    WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
-    # warmup 10
-    for _ in range(10):
-        loss, skipped_iter, mems = train_step(train_data_iterator,
-                                                        model,
-                                                        optimizer,
-                                                        lr_scheduler,
-                                                        args, timers, mems=[], forward_step_func=forward_step)
-   
-    timers('interval time').start()
-    tb = time.time()
-    t0 = time.time()
-    skipped_iters = 0
-
-    report_memory_flag = True
-    mems = []
-    for _ in range(args.train_iters):
-        loss, skipped_iter, mems = train_step(train_data_iterator,
-                                                        model,
-                                                        optimizer,
-                                                        lr_scheduler,
-                                                        args, timers, mems=mems, forward_step_func=forward_step)
-        count += 1
-        if count % args.print_iter == 0:
-            # loss.numpy()  # sync cuda
-            t1 = time.time()
-            total_batch_size = WORLD_SIZE * \
-                args.batch_size * \
-                args.print_iter
-            though_out = total_batch_size / (t1 - t0)
-            t0 = time.time()
-            if RANK == 0:
-                print(f"iter: {count}, though_out: {though_out}")
-
-    te = time.time()
-    total_batch_size =  WORLD_SIZE * \
-        args.batch_size * \
-        args.train_iters
-    avg_though_out = total_batch_size / (te - tb)
-    if RANK == 0:
-        print(f"avg_though_out: {avg_though_out}, total time: {te - tb}s")
-    
-    exit(0)
 
 def train(model, optimizer, lr_scheduler,
           train_data_iterator, val_data_iterator, timers, args, summary_writer=None):
     """Train the model."""
-    train_test_speed(model=model,
-                     optimizer=optimizer,
-                     lr_scheduler=lr_scheduler,
-                     train_data_iterator=train_data_iterator,
-                     args=args,
-                     timers=timers)
-    
+
     # Turn on training mode which enables dropout.
-    # model.train()
+    model.train()
 
     # Tracking loss.
     total_lm_loss = 0.0
@@ -371,7 +331,7 @@ def train(model, optimizer, lr_scheduler,
     timers('interval time').start()
     report_memory_flag = True
     mems = []
-    for _ in range( args.train_iters):
+    while args.iteration < args.train_iters:
 
         lm_loss, skipped_iter, mems = train_step(train_data_iterator,
                                                  model,
@@ -380,7 +340,7 @@ def train(model, optimizer, lr_scheduler,
                                                  args, timers, mems=mems, forward_step_func=forward_step)
         skipped_iters += skipped_iter
         args.iteration += 1
-        continue
+
         # Update losses.
         total_lm_loss += lm_loss.data.detach().float()
 
@@ -395,13 +355,13 @@ def train(model, optimizer, lr_scheduler,
             if report_memory_flag:
                 report_memory('after {} iterations'.format(args.iteration))
                 report_memory_flag = False
-            # for i in range(flow.distributed.get_world_size()):
-            #     if i == flow.env.get_rank():
+            # for i in range(torch.distributed.get_world_size()):
+            #     if i == torch.distributed.get_rank():
             #         print(get_hostname())
             #         timers.log(['forward', 'backward', 'optimizer',
             #                     'batch generator', 'data loader'],
             #                    normalizer=args.log_interval, reset=False)
-            #     flow.distributed.barrier()
+            #     torch.distributed.barrier()
             if args.deepspeed or args.DDP_impl == 'torch':
                 timers.log(['forward', 'backward', 'optimizer',
                             'batch generator', 'data loader'],
@@ -410,16 +370,16 @@ def train(model, optimizer, lr_scheduler,
                 timers.log(['forward', 'backward', 'allreduce', 'optimizer',
                             'batch generator', 'data loader'],
                            normalizer=args.log_interval)
-        # # Checkpointing
-        # if args.save and args.save_interval and args.iteration % args.save_interval == 0:
-        #     save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args)
+        # Checkpointing
+        if args.save and args.save_interval and args.iteration % args.save_interval == 0:
+            save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args)
 
-        # # Evaluation
-        # if args.eval_interval and args.iteration % args.eval_interval == 0 and args.do_valid:
-        #     prefix = 'iteration {}'.format(args.iteration)
-        #     evaluate_and_print_results(
-        #         prefix, val_data_iterator, model, args, timers, verbose=False, step=args.iteration,
-        #         summary_writer=summary_writer, forward_step_func=forward_step)
+        # Evaluation
+        if args.eval_interval and args.iteration % args.eval_interval == 0 and args.do_valid:
+            prefix = 'iteration {}'.format(args.iteration)
+            evaluate_and_print_results(
+                prefix, val_data_iterator, model, args, timers, verbose=False, step=args.iteration,
+                summary_writer=summary_writer, forward_step_func=forward_step)
 
     return args.iteration, skipped_iters
 
@@ -432,16 +392,14 @@ def evaluate(data_iterator, model, args, timers, forward_step_func, verbose=Fals
     total_lm_loss, total_gpt_loss, total_bert_loss, total_sent_loss, total_multi_loss = 0, 0, 0, 0, 0
     gpt_iters, bert_iters, sent_iters, multi_iters = 0, 0, 0, 0
     mems = []
-    with flow.no_grad():
+    with torch.no_grad():
         iteration = 0
         while iteration < args.eval_iters:
             iteration += 1
             if verbose and iteration % args.log_interval == 0:
-                print_rank_0(
-                    'Evaluating iter {}/{}'.format(iteration, args.eval_iters))
+                print_rank_0('Evaluating iter {}/{}'.format(iteration, args.eval_iters))
             # Forward evaluation.
-            lm_loss, mems, mode = forward_step_func(
-                data_iterator, model, args, timers, mems=mems)
+            lm_loss, mems, mode = forward_step_func(data_iterator, model, args, timers, mems=mems)
 
             '''when contiguous memory optimizations are enabled, the buffers
             allocated by the optimizations are deallocated during backward pass
@@ -467,13 +425,12 @@ def evaluate(data_iterator, model, args, timers, forward_step_func, verbose=Fals
     # Move model back to the train mode.
     model.train()
     # Reduce across processes.
-    loss_data = flow.cuda.FloatTensor(
+    loss_data = torch.cuda.FloatTensor(
         [total_lm_loss, total_gpt_loss, total_bert_loss, total_sent_loss, total_multi_loss, gpt_iters, bert_iters,
          sent_iters, multi_iters])
-    flow.distributed.all_reduce(loss_data, group=mpu.get_data_parallel_group())
+    torch.distributed.all_reduce(loss_data, group=mpu.get_data_parallel_group())
     loss_data = loss_data.tolist()
-    total_lm_loss = loss_data[0] / args.eval_iters / \
-        (args.world_size / args.model_parallel_size)
+    total_lm_loss = loss_data[0] / args.eval_iters / (args.world_size / args.model_parallel_size)
     total_gpt_loss = loss_data[1] / loss_data[5] if loss_data[5] > 0 else 0
     total_bert_loss = loss_data[2] / loss_data[6] if loss_data[6] > 0 else 0
     total_sent_loss = loss_data[3] / loss_data[7] if loss_data[7] > 0 else 0
@@ -488,8 +445,7 @@ def evaluate_and_print_results(prefix, data_iterator, model,
                                                                    forward_step_func=forward_step_func)
 
     lm_ppl = math.exp(min(20, lm_loss))
-    report_evaluate_metrics(summary_writer, prefix, lm_loss,
-                            lm_ppl, gpt_loss, bert_loss, sent_loss, multi_loss, step)
+    report_evaluate_metrics(summary_writer, prefix, lm_loss, lm_ppl, gpt_loss, bert_loss, sent_loss, multi_loss, step)
 
     return lm_loss
 
@@ -511,30 +467,29 @@ def evaluate_and_print_results(prefix, data_iterator, model,
 
 
 def set_deepspeed_activation_checkpointing(args):
-    deepspeed.checkpointing.configure(
-        mpu, deepspeed_config=args.deepspeed_config, num_checkpoints=args.num_layers)
+    deepspeed.checkpointing.configure(mpu, deepspeed_config=args.deepspeed_config, num_checkpoints=args.num_layers)
     mpu.checkpoint = deepspeed.checkpointing.checkpoint
     mpu.get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
     mpu.model_parallel_cuda_manual_seed = deepspeed.checkpointing.model_parallel_cuda_manual_seed
 
 
 def initialize_distributed(args):
-    """Initialize flow.distributed."""
+    """Initialize torch.distributed."""
 
     # Manually set the device ids.
-    device = args.rank % flow.cuda.device_count()
+    device = args.rank % torch.cuda.device_count()
     if args.local_rank is not None:
         device = args.local_rank
-    flow.cuda.set_device(device)
+    torch.cuda.set_device(device)
     # Call the init process
     init_method = 'tcp://'
     args.master_ip = os.getenv('MASTER_ADDR', 'localhost')
     args.master_port = os.getenv('MASTER_PORT', '6000')
     init_method += args.master_ip + ':' + args.master_port
-    # flow.distributed.init_process_group(
-    #     backend=args.distributed_backend,
-    #     world_size=args.world_size, rank=args.rank,
-    #     init_method=init_method)
+    torch.distributed.init_process_group(
+        backend=args.distributed_backend,
+        world_size=args.world_size, rank=args.rank,
+        init_method=init_method)
 
     # Set the model-parallel / data-parallel communicators.
     mpu.initialize_model_parallel(args.model_parallel_size)
@@ -551,7 +506,7 @@ def set_random_seed(seed):
     if seed is not None and seed > 0:
         random.seed(seed)
         np.random.seed(seed)
-        flow.manual_seed(seed)
+        torch.manual_seed(seed)
         mpu.model_parallel_cuda_manual_seed(seed)
 
 
@@ -560,49 +515,51 @@ def get_train_val_test_data(args, tokenizer):
 
     (train_data, val_data, test_data) = (None, None, None)
     # Data loader only on rank 0 of each model parallel group.
-    # if mpu.get_model_parallel_rank() == 0:
-    data_config = configure_data()
-    if args.block_lm:
-        data_set_type = "Block"
-    elif args.transformer_xl:
-        data_set_type = "GPT-XL"
+    if mpu.get_model_parallel_rank() == 0:
+        data_config = configure_data()
+        if args.block_lm:
+            data_set_type = "Block"
+        elif args.transformer_xl:
+            data_set_type = "GPT-XL"
+        else:
+            data_set_type = "GPT2"
+        data_config.set_defaults(data_set_type=data_set_type, transpose=False)
+        train_data, val_data, test_data = data_config.apply(args, tokenizer)
+
+        data_counts = torch.cuda.LongTensor([int(args.do_train), int(args.do_valid), int(args.do_test)])
     else:
-        data_set_type = "GPT2"
-    data_config.set_defaults(data_set_type=data_set_type, transpose=False)
-    train_data, val_data, test_data = data_config.apply(args, tokenizer)
+        data_counts = torch.cuda.LongTensor([0, 0, 0])
 
-    data_counts = flow.cuda.LongTensor(
-        [int(args.do_train), int(args.do_valid), int(args.do_test)])
-    # else:
-    #     data_counts = flow.cuda.LongTensor([0, 0, 0])
-
-    # # Broadcast num tokens.
-    # flow.distributed.broadcast(data_counts,
-    #                             mpu.get_model_parallel_src_rank(),
-    #                             group=mpu.get_model_parallel_group())
-
+    # Broadcast num tokens.
+    torch.distributed.broadcast(data_counts,
+                                mpu.get_model_parallel_src_rank(),
+                                group=mpu.get_model_parallel_group())
     args.do_train = data_counts[0].item()
     args.do_valid = data_counts[1].item()
     args.do_test = data_counts[2].item()
 
     return train_data, val_data, test_data
 
-def get_train_dataloader(args,tokenizer):
-    train_data, val_data, test_data, = get_train_val_test_data(args, tokenizer)
-    train_data_iterator = iter(train_data)
-    return train_data_iterator
 
 def main():
     """Main training program."""
 
     # Disable CuDNN.
-    # flow.backends.cudnn.enabled = False
+    torch.backends.cudnn.enabled = False
     # Timer.
     timers = Timers()
 
     # Arguments.
     args = get_args()
     args.mem_length = args.mem_length if args.transformer_xl else 0
+    if args.load and not args.new_save_directory:
+        args.experiment_name = os.path.basename(os.path.normpath(args.load))
+    else:
+        args.experiment_name = args.experiment_name + datetime.now().strftime("%m-%d-%H-%M")
+    if args.save:
+        args.save = os.path.join(args.save, args.experiment_name)
+    # Pytorch distributed.
+    initialize_distributed(args)
 
     # Random seeds for reproducability.
     set_random_seed(args.seed)
@@ -610,46 +567,101 @@ def main():
     # Data stuff.
     global tokenizer
     tokenizer = prepare_tokenizer(args)
-    # train_data, val_data, test_data = get_train_val_test_data(args, tokenizer)
-    train_data_iterator = get_train_dataloader(args,tokenizer) 
-    val_data, test_data = None, None
+    train_data, val_data, test_data, = get_train_val_test_data(args, tokenizer)
     multi_train_data, multi_val_data = None, None
-
+    if args.multi_task_ratio > 0.0:
+        multi_train_data, multi_val_data = build_multi_task_dataset(args, tokenizer)
 
     # Model, optimizer, and learning rate.
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
-   
-    args.iteration = 0
-    # flow.distributed.barrier()
+
+    if args.load is not None:
+        with FileLock(os.path.join(pathlib.Path.home(), "checkpoint_lock"), timeout=-1):
+            args.iteration = load_checkpoint(model, optimizer, lr_scheduler, args, no_deepspeed=args.no_deepspeed_load)
+        if args.no_load_optim and args.fp16 and optimizer is not None:
+            if args.deepspeed:
+                optimizer.refresh_fp32_params()
+            else:
+                optimizer._model_params_to_master_params()
+    else:
+        args.iteration = 0
+    torch.distributed.barrier()
     if args.switch_linear:
         lr_scheduler.switch_linear(args)
 
     summary_writer = None
-     
+    if torch.distributed.get_rank() == 0:
+        print('Pretrain GPT2 model')
+        args.log_dir = None
+        if args.train_iters > 0:
+            args.log_dir = get_log_dir(base=args.summary_dir, name=args.experiment_name)
+            summary_writer = get_sample_writer(log_dir=args.log_dir, iteration=args.iteration)
+        print_and_save_args(args, verbose=True, log_dir=args.log_dir)
+
     # Resume data loader if necessary.
     if args.resume_dataloader:
-        print("Resume dataloader")
-        
-    
-    print("pass!!")
-    multi_train_iterator = None     
-    val_data_iterator = None
-    multi_val_iterator = None
-    
+        print_rank_0("Resume dataloader")
+        if train_data is not None:
+            train_data.batch_sampler.start_iter = args.iteration % len(train_data)
+        if val_data is not None:
+            start_iter_val = (args.iteration // args.eval_interval) * args.eval_iters
+            val_data.batch_sampler.start_iter = start_iter_val % len(val_data)
+        if multi_train_data is not None:
+            multi_train_data.batch_sampler.start_iter = int(args.iteration * args.multi_task_ratio) % len(
+                multi_train_data)
+        if multi_val_data is not None:
+            start_iter_val = (args.iteration // args.eval_interval) * args.eval_iters * args.multi_task_ratio
+            multi_val_data.batch_sampler.start_iter = start_iter_val % len(multi_val_data)
+    if train_data is not None:
+        train_data_iterator = iter(train_data)
+    else:
+        train_data_iterator = None
+    if multi_train_data is not None:
+        multi_train_iterator = iter(multi_train_data)
+    else:
+        multi_train_iterator = None
+    if val_data is not None:
+        val_data_iterator = iter(val_data)
+    else:
+        val_data_iterator = None
+    if multi_val_data is not None:
+        multi_val_iterator = iter(multi_val_data)
+    else:
+        multi_val_iterator = None
+
     # TODO: figure out how to properly set this especially when resuming training
     iteration = 0
     if args.train_iters > 0:
         if args.do_train:
-            # with ExitStack() as stack:
-            #     def save_on_exit(args_, model_, optimizer_, lr_scheduler_):
-            #         save_checkpoint(args_.iteration, model_, optimizer_, lr_scheduler_, args_)
+            with ExitStack() as stack:
+                def save_on_exit(args_, model_, optimizer_, lr_scheduler_):
+                    save_checkpoint(args_.iteration, model_, optimizer_, lr_scheduler_, args_)
 
-            # stack.callback(save_on_exit, args, model, optimizer, lr_scheduler)
-            iteration, skipped = train(model, optimizer,
-                                       lr_scheduler,
-                                       (train_data_iterator, multi_train_iterator),
-                                       (val_data_iterator, multi_val_iterator),
-                                       timers, args, summary_writer=summary_writer)
+                # stack.callback(save_on_exit, args, model, optimizer, lr_scheduler)
+                iteration, skipped = train(model, optimizer,
+                                           lr_scheduler,
+                                           (train_data_iterator, multi_train_iterator),
+                                           (val_data_iterator, multi_val_iterator),
+                                           timers, args, summary_writer=summary_writer)
+
+        if args.do_valid:
+            prefix = 'the end of training for val data'
+            val_loss = evaluate_and_print_results(prefix, (val_data_iterator, multi_val_iterator),
+                                                  model, args, timers, verbose=False, forward_step_func=forward_step)
+
+    if args.save and iteration != 0:
+        save_checkpoint(iteration, model, optimizer, lr_scheduler, args)
+
+    if test_data is not None:
+        test_data_iterator = iter(test_data)
+    else:
+        test_data_iterator = None
+
+    if args.do_test:
+        # Run on test data.
+        prefix = 'the end of training for test data'
+        evaluate_and_print_results(prefix, (test_data_iterator, None),
+                                   model, args, timers, verbose=True, forward_step_func=forward_step)
 
 
 if __name__ == "__main__":

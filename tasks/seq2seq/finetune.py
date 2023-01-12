@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Race."""
-import oneflow  as flow
+import torch
 import mpu
 import json
 import functools
@@ -45,11 +45,11 @@ def seq2seq_forward_step(data, model, args, timers, mems):
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(), labels)
     if args.label_smoothing > 0.0:
         epsilon = args.label_smoothing
-        smooth_loss = -flow.nn.functional.log_softmax(logits, dim=-1).mean(dim=-1)
+        smooth_loss = -torch.nn.functional.log_softmax(logits, dim=-1).mean(dim=-1)
         losses = (1 - epsilon) * losses + epsilon * smooth_loss
     loss_mask = loss_mask.reshape(-1)
     # The loss is not normalized for fair comparison
-    loss = flow.sum(losses.reshape(-1) * loss_mask) / loss_mask.sum()
+    loss = torch.sum(losses.reshape(-1) * loss_mask) / loss_mask.sum()
     return loss, mems, 'bert'
 
 

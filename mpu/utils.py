@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-import oneflow  as flow
+import torch
 
 
 def ensure_divisibility(numerator, denominator):
@@ -43,8 +43,8 @@ def split_tensor_along_last_dim(tensor, num_partitions,
     last_dim = tensor.dim() - 1
     last_dim_size = divide(tensor.size()[last_dim], num_partitions)
     # Split.
-    tensor_list = flow.split(tensor, last_dim_size, dim=last_dim)
-    # Note: flow.split does not create contiguous tensors by default.
+    tensor_list = torch.split(tensor, last_dim_size, dim=last_dim)
+    # Note: torch.split does not create contiguous tensors by default.
     if contiguous_split_chunks:
         return tuple(chunk.contiguous() for chunk in tensor_list)
 

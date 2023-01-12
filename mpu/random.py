@@ -21,16 +21,14 @@
 # Parts of the code here are adapted from PyTorch
 # repo: https://github.com/pytorch/pytorch
 import contextlib
-import oneflow.distributed as dist
-import oneflow  as flow
-import os
-from oneflow import _C
-
-# from oneflow.cuda import _lazy_call, device as device_ctx_manager
-#from oneflow.utils.checkpoint import detach_variable
+import torch.distributed as dist
+import torch
+from torch import _C
+from torch.cuda import _lazy_call, device as device_ctx_manager
+#from torch.utils.checkpoint import detach_variable
 
 
-import oneflow.distributed as dist
+import torch.distributed as dist
 PARTITION_ACTIVATIONS = False
 PA_CORRECTNESS_TEST= False
 
@@ -40,10 +38,10 @@ def see_memory_usage(message, force=False):
     dist.barrier()
     if dist.get_rank() == 0:
         print(message)
-        print("Memory Allocated ", flow.cuda.memory_allocated()/(1024*1024*1024), "GigaBytes")
-        print("Max Memory Allocated ", flow.cuda.max_memory_allocated()/(1024*1024*1024), "GigaBytes")
-        print("Cache Allocated ", flow.cuda.memory_cached()/(1024*1024*1024), "GigaBytes")
-        print("Max cache Allocated ", flow.cuda.max_memory_cached()/(1024*1024*1024), "GigaBytes")
+        print("Memory Allocated ", torch.cuda.memory_allocated()/(1024*1024*1024), "GigaBytes")
+        print("Max Memory Allocated ", torch.cuda.max_memory_allocated()/(1024*1024*1024), "GigaBytes")
+        print("Cache Allocated ", torch.cuda.memory_cached()/(1024*1024*1024), "GigaBytes")
+        print("Max cache Allocated ", torch.cuda.max_memory_cached()/(1024*1024*1024), "GigaBytes")
         print(" ")
         #input("Press Any Key To Continue ..")
 
@@ -51,7 +49,7 @@ def see_memory_usage(message, force=False):
 from .initialize import get_data_parallel_rank
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_world_size
-# from .initialize import get_model_parallel_group
+from .initialize import get_model_parallel_group
 
 mp_rank = None #get_model_parallel_rank()
 mp_size = None #get_model_parallel_world_size()
@@ -65,7 +63,7 @@ def detach_variable(inputs, device=None):
     if isinstance(inputs, tuple):
         out = []
         for inp in inputs:
-            if not isinstance(inp, flow.Tensor):
+            if not isinstance(inp, torch.Tensor):
                 out.append(inp)
                 continue
 
@@ -88,33 +86,33 @@ def _set_cuda_rng_state(new_state, device=-1):
     """Sets the random number generator state of the current GPU.
 
     Argumentss:
-        new_state (flow.ByteTensor): The desired state
-    This function is adapted from PyTorch repo (flow.cuda.set_rng_state)
+        new_state (torch.ByteTensor): The desired state
+    This function is adapted from PyTorch repo (torch.cuda.set_rng_state)
     with a single change: the input state is not cloned. Cloning caused
     major performance issues for +4 GPU cases.
     """
     if hasattr(_C, '_cuda_setRNGState') and callable(_C._cuda_setRNGState):
         # older PyTorch
         def cb():
-            # with device_ctx_manager(device):
-            _C._cuda_setRNGState(new_state)
+            with device_ctx_manager(device):
+                _C._cuda_setRNGState(new_state)
     else:
         # newer PyTorch
         if device == -1:
-            device = flow.device('cuda')
+            device = torch.device('cuda')
         elif isinstance(device, str):
-            device = flow.device(device)
+            device = torch.device(device)
         elif isinstance(device, int):
-            device = flow.device('cuda', device)
+            device = torch.device('cuda', device)
 
         def cb():
             idx = device.index
             if idx is None:
-                idx = flow.cuda.current_device()
-            default_generator = flow.cuda.default_generators[idx]
+                idx = torch.cuda.current_device()
+            default_generator = torch.cuda.default_generators[idx]
             default_generator.set_state(new_state)
 
-    # _lazy_call(cb)
+    _lazy_call(cb)
 
 
 
@@ -160,12 +158,12 @@ class CudaRNGStatesTracker:
         if name in self.states_:
             raise Exception('cuda rng state {} already exists'.format(name))
         # Get the current rng state.
-        # orig_rng_state = flow.cuda.get_rng_state()
+        orig_rng_state = torch.cuda.get_rng_state()
         # Set the new state and store it.
-        flow.cuda.manual_seed(seed)
-        # self.states_[name] = flow.cuda.get_rng_state()
+        torch.cuda.manual_seed(seed)
+        self.states_[name] = torch.cuda.get_rng_state()
         # Reset rng state to what it was.
-        # _set_cuda_rng_state(orig_rng_state)
+        _set_cuda_rng_state(orig_rng_state)
 
     @contextlib.contextmanager
     def fork(self, name=_MODEL_PARALLEL_RNG_TRACKER_NAME):
@@ -175,7 +173,7 @@ class CudaRNGStatesTracker:
         if name not in self.states_:
             raise Exception('cuda rng state {} is not added'.format(name))
         # Store current rng state.
-        orig_cuda_rng_state = flow.cuda.get_rng_state()
+        orig_cuda_rng_state = torch.cuda.get_rng_state()
         # Set rng state to the desired one
         _set_cuda_rng_state(self.states_[name])
         # Do the stuff we wanted to do.
@@ -183,7 +181,7 @@ class CudaRNGStatesTracker:
             yield
         finally:
             # Update the current rng state for later use.
-            self.states_[name] = flow.cuda.get_rng_state()
+            self.states_[name] = torch.cuda.get_rng_state()
             # And set the state to the original state we started with.
             _set_cuda_rng_state(orig_cuda_rng_state)
 
@@ -201,7 +199,7 @@ def model_parallel_cuda_manual_seed(seed):
     """Initialize model parallel cuda seed.
 
     This function should be called after the model parallel is
-    initialized. Also, no flow.cuda.manual_seed should be called
+    initialized. Also, no torch.cuda.manual_seed should be called
     after this function. Basically, this is replacement for that
     function.
     Two set of RNG states are tracked:
@@ -220,16 +218,16 @@ def model_parallel_cuda_manual_seed(seed):
     # Data parallel gets the original sedd.
     data_parallel_seed = seed
 
-    if flow.env.get_rank() == 0:
+    if torch.distributed.get_rank() == 0:
         print('> initializing model parallel cuda seeds on global rank {}, '
               'model parallel rank {}, and data parallel rank {} with '
               'model parallel seed: {} and data parallel seed: {}'.format(
-                  flow.env.get_rank(), get_model_parallel_rank(),
+                  torch.distributed.get_rank(), get_model_parallel_rank(),
                   get_data_parallel_rank(), model_parallel_seed,
                   data_parallel_seed), flush=True)
     _CUDA_RNG_STATE_TRACKER.reset()
     # Set the default state.
-    flow.cuda.manual_seed(data_parallel_seed)
+    torch.cuda.manual_seed(data_parallel_seed)
     # and model parallel state.
     _CUDA_RNG_STATE_TRACKER.add(_MODEL_PARALLEL_RNG_TRACKER_NAME,
                                 model_parallel_seed)
@@ -254,7 +252,7 @@ def get_full_inputs(tensors):
         size = tensors[2* i + 1]
         partition_size = item.numel()
         tensor_size = partition_size * mp_size
-        flat_tensor = flow.zeros([tensor_size], dtype=item.dtype, device=item.device)
+        flat_tensor = torch.zeros([tensor_size], dtype=item.dtype, device=item.device)
         partitions=[]
         for i in range(mp_size):
             part_i = flat_tensor.narrow(0, partition_size * i , partition_size)
@@ -272,10 +270,10 @@ def get_full_inputs(tensors):
 
         
 
-class CheckpointFunction(flow.autograd.Function):
-    """This function is adapted from oneflow.utils.checkpoint with
+class CheckpointFunction(torch.autograd.Function):
+    """This function is adapted from torch.utils.checkpoint with
        two main changes:
-           1) flow.cuda.set_rng_state is replaced with `_set_cuda_rng_state`
+           1) torch.cuda.set_rng_state is replaced with `_set_cuda_rng_state`
            2) the states in the model parallel tracker are also properly
               tracked/set/reset.
     """
@@ -294,10 +292,10 @@ class CheckpointFunction(flow.autograd.Function):
             if dist.get_rank()  == 0:
                 print(f"Partition Activations {PARTITION_ACTIVATIONS} and Correctness Check {PA_CORRECTNESS_TEST}")
             
-            cuda_device = flow.cuda.current_device()
+            cuda_device = torch.cuda.current_device()
             #The transport stream is used to overlap the allgather communication for the activations
             #with the computation in the backward pass
-            transport_stream = flow.cuda.Stream(device=cuda_device)
+            transport_stream = torch.cuda.Stream(device=cuda_device)
 
         if PARTITION_ACTIVATIONS:
             inputs = [item.detach().contiguous().view(-1).narrow(0, get_partition_start(item), get_partition_size(item)).clone() for item in args[:-1]]
@@ -307,12 +305,12 @@ class CheckpointFunction(flow.autograd.Function):
         inputs_cuda = [item.to(cuda_device) for item in args]
         
         # Copy the rng states.
-        ctx.fwd_cpu_rng_state = flow.get_rng_state()
-        ctx.fwd_cuda_rng_state = flow.cuda.get_rng_state()
+        ctx.fwd_cpu_rng_state = torch.get_rng_state()
+        ctx.fwd_cuda_rng_state = torch.cuda.get_rng_state()
         ctx.fwd_cuda_rng_state_tracker = get_cuda_rng_tracker().get_states()
 
         #ctx.save_for_backward(*args)
-        with flow.no_grad():
+        with torch.no_grad():
             outputs = run_function(*inputs_cuda)
 
         del inputs_cuda
@@ -320,7 +318,7 @@ class CheckpointFunction(flow.autograd.Function):
         if PARTITION_ACTIVATIONS:
             new_args = []
             for arg, inp in zip(args,inputs):                
-                size= flow.tensor(arg.size())
+                size= torch.tensor(arg.size())
                 arg.data = inp.data
                 new_args.append(arg)
                 new_args.append(size)
@@ -332,14 +330,14 @@ class CheckpointFunction(flow.autograd.Function):
 
     @staticmethod
     def backward(ctx, *args):
-        if not flow.autograd._is_checkpoint_valid():
+        if not torch.autograd._is_checkpoint_valid():
             raise RuntimeError("Checkpointing is not compatible with .grad(), "
                                "please use .backward() if possible")
         
         global cuda_device, transport_stream, PARTITION_ACTIVATIONS
         
         if PARTITION_ACTIVATIONS:
-            with flow.cuda.stream(transport_stream):
+            with torch.cuda.stream(transport_stream):
                 inputs = get_full_inputs(ctx.saved_tensors)
                 detached_inputs = detach_variable(inputs)
         else:
@@ -347,36 +345,36 @@ class CheckpointFunction(flow.autograd.Function):
             detached_inputs = detach_variable(inputs)
 
         # Store the current states.
-        bwd_cpu_rng_state = flow.get_rng_state()
-        bwd_cuda_rng_state = flow.cuda.get_rng_state()
+        bwd_cpu_rng_state = torch.get_rng_state()
+        bwd_cuda_rng_state = torch.cuda.get_rng_state()
         bwd_cuda_rng_state_tracker = get_cuda_rng_tracker().get_states()
 
         # Set the states to what it used to be before the forward pass.
-        flow.set_rng_state(ctx.fwd_cpu_rng_state)
+        torch.set_rng_state(ctx.fwd_cpu_rng_state)
         _set_cuda_rng_state(ctx.fwd_cuda_rng_state)
         get_cuda_rng_tracker().set_states(ctx.fwd_cuda_rng_state_tracker)
         
         if PARTITION_ACTIVATIONS:
-            current_stream=flow.cuda.current_stream()
+            current_stream=torch.cuda.current_stream()
             current_stream.wait_stream(transport_stream)
 
-        with flow.enable_grad():
+        with torch.enable_grad():
             outputs = ctx.run_function(*detached_inputs)
 
         # Set the states back to what it was at the start of this function.
-        flow.set_rng_state(bwd_cpu_rng_state)
+        torch.set_rng_state(bwd_cpu_rng_state)
         _set_cuda_rng_state(bwd_cuda_rng_state)
         get_cuda_rng_tracker().set_states(bwd_cuda_rng_state_tracker)
 
-        if isinstance(outputs, flow.Tensor):
+        if isinstance(outputs, torch.Tensor):
             outputs = (outputs,)
-        flow.autograd.backward(outputs, args)
+        torch.autograd.backward(outputs, args)
         return (None,) + tuple(inp.grad for inp in detached_inputs)
 
 
 def checkpoint(function, *args):
     """Checkpoint a model or part of the model.
-    This has been directly copied from oneflow.utils.checkpoint."""
+    This has been directly copied from torch.utils.checkpoint."""
     return CheckpointFunction.apply(function, *args)
 
 def partition_activations_in_checkpoint(partition_activation):

@@ -1,13 +1,13 @@
-DATA_ROOT=/data/dataset/fengwen/resume-zip/other/dataset/  #/dataset/fd5061f6/tuteng/BlockLM/data
-CHECKPOINT_PATH=/home/fengwen/datasets/CHECKPOINT_PATH # /data/dataset/fengwen/resume-zip/other/checkpoints/blocklm-base-blank
-SAVE_PATH=/home/fengwen/GLM/datasets/save_path
+DATA_ROOT=/dataset/fd5061f6/tuteng/BlockLM/data
+CHECKPOINT_PATH=/dataset/fd5061f6/english_data/checkpoints
+SAVE_PATH=/dataset/fd5061f6/tuteng/BlockLM/finetune_checkpoints
 DATESTR=$(date +"%m-%d-%H-%M")
 
 source $1    # Model
 source $2    # Task
 
 NUM_WORKERS=1
-NUM_GPUS_PER_WORKER=1
+NUM_GPUS_PER_WORKER=8
 MP_SIZE=1
 MASTER_PORT=$(shuf -n 1 -i 10000-65535)
 
@@ -27,7 +27,7 @@ run_cmd="${DISTRIBUTED_ARGS} finetune_glm.py \
        --save ${CHECKPOINT_PATH} \
        --seq-length ${MAX_SEQ_LEN} \
        --checkpoint-activations \
-       --eval-batch-size 2 \
+       --eval-batch-size 16 \
        --save-epoch 100000 \
        --num-workers 1 \
        --no-load-optim \
@@ -36,11 +36,11 @@ run_cmd="${DISTRIBUTED_ARGS} finetune_glm.py \
        $TRAIN_ARGS \
        $COMMON_ARGS \
        --pattern-id 0 \
+       --fp16 \
        --model-parallel-size ${MP_SIZE} \
        --epochs ${XXLARGE_EPOCH} \
        --overwrite \
        2>&1 | tee logs/log-${EXPERIMENT_NAME}.txt"
-       # --fp16 \
 
 echo ${run_cmd}
 eval ${run_cmd}

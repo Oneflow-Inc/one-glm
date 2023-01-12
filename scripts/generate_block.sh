@@ -18,7 +18,7 @@ script_dir=$(dirname $script_path)
 
 config_json="$script_dir/ds_config.json"
 
-python -m flow.distributed.launch --nproc_per_node=$MPSIZE --master_port $MASTER_PORT generate_samples.py \
+python -m torch.distributed.launch --nproc_per_node=$MPSIZE --master_port $MASTER_PORT generate_samples.py \
        --DDP-impl none \
        --model-parallel-size $MPSIZE \
        $MODEL_ARGS \

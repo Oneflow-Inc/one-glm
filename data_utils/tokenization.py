@@ -17,7 +17,7 @@ from collections import namedtuple
 import random
 import os
 import csv
-import oneflow  as flow
+import torch
 import itertools
 
 import nltk
@@ -789,18 +789,13 @@ class BertWordPieceTokenizer(Tokenizer):
         # default to bert-large-uncased tokenizer
         if tokenizer_model_type not in PRETRAINED_VOCAB_ARCHIVE_MAP:
             tokenizer_model_type = 'bert-large-uncased'
-        # True
-        # if not flow.distributed.is_initialized() or flow.env.get_rank() == 0:
-        #     print('loading BertWordPieceTokenizer (', tokenizer_model_type, ') from cache_dir ', cache_dir)
-
-        # True
+        if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
+            print('loading BertWordPieceTokenizer (', tokenizer_model_type, ') from cache_dir ', cache_dir)
         do_lower_case = not ('-cased' in tokenizer_model_type or 'chinese' in tokenizer_model_type)
         self.text_tokenizer = BertTokenizer.from_pretrained(tokenizer_model_type, do_lower_case=do_lower_case,
                                                             cache_dir=cache_dir)
-        # True
-        # if not flow.distributed.is_initialized() or flow.env.get_rank() == 0:
-        #     print('loaded', tokenizer_model_type)
-        
+        if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
+            print('loaded', tokenizer_model_type)
         # disable max len warnings by increasing max len
         self.text_tokenizer.max_len = int(1e12)
 

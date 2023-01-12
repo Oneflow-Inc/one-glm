@@ -2,8 +2,8 @@ import string
 import datetime
 import random
 import re
-import oneflow  as flow
-import oneflow.nn.functional as F
+import torch
+import torch.nn.functional as F
 import mpu
 from utils import print_rank_0
 from generation_utils import BeamSearchScorer, LogitsProcessorList, MinLengthLogitsProcessor, \
@@ -177,7 +177,7 @@ def rouge_metric(predictions, labels, examples, metric="rouge-1", duplicate_rate
             buf = remove_duplicate(buf, duplicate_rate)
         line = "\n".join(buf)
         pred_list.append(line)
-    if flow.env.get_rank() == 0:
+    if torch.distributed.get_rank() == 0:
         import json
         with open("./results.json", "w") as output:
             for ref, pred in zip(ref_list, pred_list):
@@ -269,7 +269,7 @@ class DecoderEvaluater:
         model.eval()
         local_predictions = {}
         print_rank_0("Distributed store created")
-        with flow.no_grad():
+        with torch.no_grad():
             # For all the batches in the dataset.
             for idx, data in enumerate(dataloader):
                 tokens, attention_mask, position_ids = process_batch(data, args)
@@ -282,7 +282,7 @@ class DecoderEvaluater:
                     length_penalty=args.length_penalty,
                     do_early_stopping=False,
                 )
-                beam_scores = flow.zeros((batch_size, args.num_beams), dtype=flow.float, device=tokens.device)
+                beam_scores = torch.zeros((batch_size, args.num_beams), dtype=torch.float, device=tokens.device)
                 beam_scores[:, 1:] = -1e9
                 beam_scores = beam_scores.view((batch_size * args.num_beams,))
                 # Run the model forward.
@@ -318,12 +318,12 @@ class DecoderEvaluater:
 
                     probs = F.softmax(next_token_scores, dim=-1)
                     if args.select_topk:
-                        _, next_tokens = flow.topk(probs, k=2 * args.num_beams, dim=-1, largest=True)
+                        _, next_tokens = torch.topk(probs, k=2 * args.num_beams, dim=-1, largest=True)
                     else:
-                        next_tokens = flow.multinomial(probs, num_samples=2 * args.num_beams)
-                    next_token_scores = flow.gather(next_token_scores, -1, next_tokens)
-                    next_token_scores, _indices = flow.sort(next_token_scores, descending=True, dim=1)
-                    next_tokens = flow.gather(next_tokens, -1, _indices)
+                        next_tokens = torch.multinomial(probs, num_samples=2 * args.num_beams)
+                    next_token_scores = torch.gather(next_token_scores, -1, next_tokens)
+                    next_token_scores, _indices = torch.sort(next_token_scores, descending=True, dim=1)
+                    next_tokens = torch.gather(next_tokens, -1, _indices)
 
                     next_indices = next_tokens // vocab_size
                     next_tokens = next_tokens % vocab_size
@@ -340,7 +340,7 @@ class DecoderEvaluater:
                     beam_next_tokens = beam_outputs["next_beam_tokens"]
                     beam_idx = beam_outputs["next_beam_indices"]
                     beam_next_tokens = beam_next_tokens.unsqueeze(-1)
-                    tokens = flow.cat([tokens[beam_idx, :], beam_next_tokens], dim=-1)
+                    tokens = torch.cat([tokens[beam_idx, :], beam_next_tokens], dim=-1)
                     mems = [mem[beam_idx] for mem in mems] if mems else []
                     if beam_scorer.is_done:
                         break
@@ -348,7 +348,7 @@ class DecoderEvaluater:
                 tokens, _, scores = beam_scorer.finalize(tokens, beam_scores, next_tokens, next_indices,
                                                          eos_token_id=self.end_token, pad_token_id=self.pad_token)
                 uid_list = data['uid']
-                if isinstance(uid_list, flow.Tensor):
+                if isinstance(uid_list, torch.Tensor):
                     uid_list = uid_list.cpu().numpy().tolist()
                 predictions = []
                 for i, text in enumerate(tokens.tolist()):
@@ -365,17 +365,17 @@ class DecoderEvaluater:
                 if (idx + 1) % args.log_interval == 0:
                     print_rank_0(f"Iteration {idx + 1} / {len(dataloader)}")
         model.train()
-        flow.distributed.barrier()
+        torch.distributed.barrier()
         print_rank_0("Evaluation completed")
-        gathered_predictions = [None for i in range(flow.distributed.get_world_size())]
-        flow.distributed.all_gather_object(gathered_predictions, local_predictions)
+        gathered_predictions = [None for i in range(torch.distributed.get_world_size())]
+        torch.distributed.all_gather_object(gathered_predictions, local_predictions)
         gathered_predictions = {uid: pred for preds in gathered_predictions for uid, pred in preds.items() }
         predictions, examples, scores = [], [], []
         for uid, example in example_dict.items():
             prediction = gathered_predictions[uid]
             predictions.append(prediction)
             examples.append(example)
-        flow.distributed.barrier()
+        torch.distributed.barrier()
         return predictions, [], examples
 
 
@@ -399,12 +399,12 @@ class BlankLMEvaluater(DecoderEvaluater):
 
     def evaluate(self, model, dataloader, example_dict, args):
         model.eval()
-        store = flow.distributed.TCPStore(args.master_ip, 18931 + random.randint(0, 10000),
+        store = torch.distributed.TCPStore(args.master_ip, 18931 + random.randint(0, 10000),
                                            mpu.get_data_parallel_world_size(),
-                                           flow.env.get_rank() == 0, datetime.timedelta(seconds=30))
+                                           torch.distributed.get_rank() == 0, datetime.timedelta(seconds=30))
         print_rank_0("Distributed store created")
 
-        with flow.no_grad():
+        with torch.no_grad():
             for idx, data in enumerate(dataloader):
                 tokens, attention_mask, position_ids = process_batch(data, args)
                 src_tokens = tokens
@@ -453,7 +453,7 @@ class BlankLMEvaluater(DecoderEvaluater):
                             next_tokens[i] = self.pad_token
                     if all(done):
                         break
-                    tokens = flow.cat([tokens, next_tokens.unsqueeze(-1)], dim=-1)
+                    tokens = torch.cat([tokens, next_tokens.unsqueeze(-1)], dim=-1)
                     counter += 1
                 predictions = []
                 for i, text in enumerate(tokens.tolist()):
@@ -479,7 +479,7 @@ class BlankLMEvaluater(DecoderEvaluater):
                     predictions.append(text)
                     # print(text)
                 uid_list = data['uid']
-                if isinstance(uid_list, flow.Tensor):
+                if isinstance(uid_list, torch.Tensor):
                     uid_list = uid_list.cpu().numpy().tolist()
                 for uid, prediction in zip(uid_list, predictions):
                     store.set(uid, prediction)
@@ -487,11 +487,11 @@ class BlankLMEvaluater(DecoderEvaluater):
                     print_rank_0(f"Iteration {idx + 1} / {len(dataloader)}")
 
         model.train()
-        flow.distributed.barrier()
+        torch.distributed.barrier()
         print_rank_0("Evaluation completed")
         predictions, examples = [], []
         for uid, example in example_dict.items():
             predictions.append(store.get(uid).decode('utf-8'))
             examples.append(example)
-        flow.distributed.barrier()
+        torch.distributed.barrier()
         return predictions, [], examples

@@ -17,15 +17,15 @@ import argparse
 import os
 import random
 import numpy
-import oneflow  as flow
+import torch
 
 import mpu
 
 
-class IdentityLayer(flow.nn.Module):
+class IdentityLayer(torch.nn.Module):
     def __init__(self, size, scale=1.0):
         super(IdentityLayer, self).__init__()
-        self.weight = flow.nn.Parameter(scale * flow.randn(size))
+        self.weight = torch.nn.Parameter(scale * torch.randn(size))
     def forward(self):
         return self.weight
 
@@ -34,12 +34,12 @@ def set_random_seed(seed):
     """Set random seed for reproducability."""
     random.seed(seed)
     numpy.random.seed(seed)
-    flow.manual_seed(seed)
+    torch.manual_seed(seed)
     mpu.model_parallel_cuda_manual_seed(seed)
 
 
 def initialize_distributed(backend='nccl'):
-    """Initialize flow.distributed."""
+    """Initialize torch.distributed."""
     # Get local rank in case it is provided.
     parser = argparse.ArgumentParser()
     parser.add_argument('--local_rank', type=int, default=None,
@@ -48,25 +48,24 @@ def initialize_distributed(backend='nccl'):
     local_rank = args.local_rank
 
     # Get rank and world size.
-    # rank = int(os.getenv('RANK', '0'))
-    # world_size = int(os.getenv("WORLD_SIZE", '1'))
-    world_size,rank = 1,0
+    rank = int(os.getenv('RANK', '0'))
+    world_size = int(os.getenv("WORLD_SIZE", '1'))
 
-    print('> initializing flow.distributed with local rank: {}, '
+    print('> initializing torch.distributed with local rank: {}, '
           'rank: {}, world size: {}'.format(local_rank, rank, world_size))
 
     # Set the device id.
-    device = rank % flow.cuda.device_count()
+    device = rank % torch.cuda.device_count()
     if local_rank is not None:
         device = local_rank
-    flow.cuda.set_device(device)
+    torch.cuda.set_device(device)
 
     # Call the init process.
     init_method = 'tcp://'
     master_ip = os.getenv('MASTER_ADDR', 'localhost')
     master_port = os.getenv('MASTER_PORT', '6000')
     init_method += master_ip + ':' + master_port
-    flow.distributed.init_process_group(
+    torch.distributed.init_process_group(
         backend=backend,
         world_size=world_size,
         rank=rank,
@@ -74,10 +73,10 @@ def initialize_distributed(backend='nccl'):
 
 
 def print_separator(message):
-    flow.distributed.barrier()
+    torch.distributed.barrier()
     filler_len = (78 - len(message)) // 2
     filler = '-' * filler_len
     string = '\n' + filler + ' {} '.format(message) + filler
-    if flow.env.get_rank() == 0:
+    if torch.distributed.get_rank() == 0:
         print(string, flush=True)
-    flow.distributed.barrier()
+    torch.distributed.barrier()

@@ -1,34 +1,34 @@
 import random
-import oneflow  as flow
+import torch
 
 
-class PromptSpell(flow.nn.Module):
+class PromptSpell(torch.nn.Module):
     def __init__(self, spell_length, hidden_size, spell_func):
         super(PromptSpell, self).__init__()
         self.spell_length = spell_length
         self.hidden_size = hidden_size
-        self.spell_embeddings = flow.nn.Embedding(self.spell_length, self.hidden_size)
+        self.spell_embeddings = torch.nn.Embedding(self.spell_length, self.hidden_size)
         self.spell_func = spell_func
         if self.spell_func == "lstm":
-            self.lstm_head = flow.nn.LSTM(input_size=self.hidden_size,
+            self.lstm_head = torch.nn.LSTM(input_size=self.hidden_size,
                                            hidden_size=self.hidden_size,
                                            num_layers=2,
                                            # dropout=self.lstm_dropout,
                                            bidirectional=True,
-                                           batch_first=True)  # .to(flow.device("cuda"))
-            self.mlp_head = flow.nn.Sequential(flow.nn.Linear(2 * self.hidden_size, self.hidden_size),
-                                                flow.nn.ReLU(),
-                                                flow.nn.Linear(self.hidden_size, self.hidden_size))
+                                           batch_first=True)  # .to(torch.device("cuda"))
+            self.mlp_head = torch.nn.Sequential(torch.nn.Linear(2 * self.hidden_size, self.hidden_size),
+                                                torch.nn.ReLU(),
+                                                torch.nn.Linear(self.hidden_size, self.hidden_size))
         elif self.spell_func == "mlp":
-            self.mlp_head = flow.nn.Sequential(flow.nn.Linear(self.hidden_size, self.hidden_size),
-                                                flow.nn.ReLU(),
-                                                flow.nn.Linear(self.hidden_size, self.hidden_size))
+            self.mlp_head = torch.nn.Sequential(torch.nn.Linear(self.hidden_size, self.hidden_size),
+                                                torch.nn.ReLU(),
+                                                torch.nn.Linear(self.hidden_size, self.hidden_size))
         elif self.spell_func != "none":
             raise NotImplementedError("Prompt function " + self.spell_func)
 
     def init_embedding(self, word_embeddings=None, task_tokens=None):
         num_words = 5000
-        with flow.no_grad():
+        with torch.no_grad():
             for i in range(self.spell_length):
                 rand_token = random.randrange(num_words)
                 if task_tokens is None:

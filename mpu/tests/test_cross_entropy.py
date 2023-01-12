@@ -17,8 +17,8 @@ import random
 import sys
 sys.path.append("../..")
 
-import oneflow  as flow
-import oneflow.nn.functional as F
+import torch
+import torch.nn.functional as F
 import mpu
 from mpu.cross_entropy import vocab_parallel_cross_entropy
 
@@ -34,7 +34,7 @@ def torch_cross_entropy(batch_size, seq_length, vocab_size,
     identity = IdentityLayer((batch_size, seq_length, vocab_size),
                              scale=logits_scale).cuda()
     logits = identity()
-    target = flow.cuda.LongTensor(
+    target = torch.cuda.LongTensor(
         size=(batch_size, seq_length)).random_(0, vocab_size)
     loss = F.cross_entropy(logits.view(-1, logits.size()[-1]),
                            target.view(-1),
@@ -50,7 +50,7 @@ def mpu_cross_entropy(batch_size, seq_length, vocab_size,
                              scale=logits_scale).cuda()
     logits = identity()
     logits_parallel = mpu.scatter_to_model_parallel_region(logits)
-    target = flow.cuda.LongTensor(
+    target = torch.cuda.LongTensor(
         size=(batch_size, seq_length)).random_(0, vocab_size)
     loss = vocab_parallel_cross_entropy(logits_parallel, target).mean()
     loss.backward()
@@ -59,7 +59,7 @@ def mpu_cross_entropy(batch_size, seq_length, vocab_size,
 
 def test_cross_entropy(model_parallel_size):
 
-    if flow.env.get_rank() == 0:
+    if torch.distributed.get_rank() == 0:
         print('> testing cross entropy with model parallel size {} ...'.
               format(model_parallel_size))
 
@@ -80,28 +80,28 @@ def test_cross_entropy(model_parallel_size):
                                            vocab_size, logits_scale,
                                            seed)
 
-    error = loss_flow.sub_(loss_mpu).abs().max()
+    error = loss_torch.sub_(loss_mpu).abs().max()
     print('   max error in loss on global rank {}: {}'.format(
-        flow.env.get_rank(), error))
+        torch.distributed.get_rank(), error))
     assert error < 1.0e-6
 
-    error = grad_flow.sub_(grad_mpu).abs().max()
+    error = grad_torch.sub_(grad_mpu).abs().max()
     print('   max error in grad on global rank {}: {}'.format(
-        flow.env.get_rank(), error))
+        torch.distributed.get_rank(), error))
     assert error < 1.0e-6
 
     # Reset groups
     mpu.destroy_model_parallel()
 
-    flow.distributed.barrier()
-    if flow.env.get_rank() == 0:
+    torch.distributed.barrier()
+    if torch.distributed.get_rank() == 0:
         print('>> passed the test :-)')
 
 
 if __name__ == '__main__':
 
     initialize_distributed()
-    world_size = 1 # flow.distributed.get_world_size()
+    world_size = torch.distributed.get_world_size()
 
     model_parallel_size = 1
     while model_parallel_size <= world_size:

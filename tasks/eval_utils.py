@@ -18,7 +18,7 @@
 import os
 import time
 import random
-import oneflow  as flow
+import torch
 import datetime
 
 import mpu
@@ -57,7 +57,7 @@ def accuracy_func_provider(single_dataset_provider, metric_dict, args, is_test=F
     # Build dataloaders.
     global global_tokenizer
     global_tokenizer = tokenizer
-    if only_rank0 and flow.distributed.is_initialized() and flow.env.get_rank() != 0:
+    if only_rank0 and torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
         return None
     if is_test and not args.eval_valid:
         datapaths = args.test_data if args.test_data is not None else ['test']
@@ -86,7 +86,7 @@ def accuracy_func_provider(single_dataset_provider, metric_dict, args, is_test=F
             start_time = time.time()
             predictions, labels, examples = eval_func(model, dataloader, example_dict, args)
             elapsed_time = time.time() - start_time
-            if output_predictions and flow.env.get_rank() == 0:
+            if output_predictions and torch.distributed.get_rank() == 0:
                 filename = os.path.join(args.log_dir, name + '.jsonl')
                 output_func(predictions, examples, filename)
             total_count = len(predictions)
@@ -122,7 +122,7 @@ def multichoice_evaluate(model, dataloader, example_dict, args):
     `output_predictions` is true."""
     model.eval()
     results = {}
-    with flow.no_grad():
+    with torch.no_grad():
         # For all the batches in the dataset.
         for _, batch in enumerate(dataloader):
             # Run the model forward.
@@ -158,7 +158,7 @@ def multichoice_evaluate(model, dataloader, example_dict, args):
                     else:
                         logits, *mems = model(*input_batch)
                     logit_list.append(logits)
-                logits = flow.cat(logit_list, dim=1)
+                logits = torch.cat(logit_list, dim=1)
             elif args.cloze_eval and args.fast_decode:
                 logit_list = []
                 num_choices = inputs[3].size(1)
@@ -167,7 +167,7 @@ def multichoice_evaluate(model, dataloader, example_dict, args):
                                                 inputs[3:]]
                     logits, *mems = model(*input_batch)
                     logit_list.append(logits)
-                logits = flow.cat(logit_list, dim=1)
+                logits = torch.cat(logit_list, dim=1)
             else:
                 if args.pretrained_bert:
                     logits = model(*inputs)
@@ -182,9 +182,9 @@ def multichoice_evaluate(model, dataloader, example_dict, args):
                 loss_mask = data["loss_mask"]
                 logits = logits * loss_mask - 10000.0 * (1.0 - loss_mask)
             uid_list = batch['uid']
-            if isinstance(uid_list, flow.Tensor):
+            if isinstance(uid_list, torch.Tensor):
                 uid_list = uid_list.cpu().numpy().tolist()
-            predicted = flow.argmax(logits, dim=-1).tolist()
+            predicted = torch.argmax(logits, dim=-1).tolist()
             labels = labels_.tolist()
             if args.task.lower() == 'wsc':
                 predicted = [1 if pred == 0 else 0 for pred in predicted]
@@ -192,9 +192,9 @@ def multichoice_evaluate(model, dataloader, example_dict, args):
                 for uid, prediction, label in zip(uid_list, predicted, labels):
                     results[uid] = (prediction, label)
     model.train()
-    flow.distributed.barrier()
+    torch.distributed.barrier()
     results_gathered = [None for _ in range(mpu.get_data_parallel_world_size())]
-    flow.distributed.all_gather_object(results_gathered, results, group=mpu.get_data_parallel_group())
+    torch.distributed.all_gather_object(results_gathered, results, group=mpu.get_data_parallel_group())
     results = {}
     for result in results_gathered:
         results.update(result)
@@ -204,5 +204,5 @@ def multichoice_evaluate(model, dataloader, example_dict, args):
         predictions.append(prediction)
         labels.append(label)
         examples.append(example)
-    flow.distributed.barrier()
+    torch.distributed.barrier()
     return predictions, labels, examples

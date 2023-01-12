@@ -17,7 +17,7 @@
 
 import math
 import functools
-import oneflow  as flow
+import torch
 
 from utils import print_rank_0
 import mpu
@@ -99,13 +99,13 @@ def lm_forward_step(data, model, args, timers, mems, eval_metric=None):
         losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(), labels)
         loss_mask = loss_mask.view(-1)
         # The loss is not normalized for fair comparison
-        loss = flow.sum(losses.view(-1) * loss_mask)
+        loss = torch.sum(losses.view(-1) * loss_mask)
         if eval_metric is None:
             loss = loss / loss_mask.sum()
         return loss, mems, 'bert'
     elif eval_metric == 'accuracy' or eval_metric == 'classify':
         logits = mpu.gather_from_model_parallel_region(logits)
-        outputs = flow.argmax(logits, -1)
+        outputs = torch.argmax(logits, -1)
         correct = (outputs == labels).float()
         correct[(1 - loss_mask).bool()] = 1
         correct = correct.prod(-1)
@@ -121,7 +121,7 @@ def classify_evaluate(model, dataloader, example_dict, args):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     predictions, labels, examples = [], [], []
-    with flow.no_grad():
+    with torch.no_grad():
         # For all the batches in the dataset.
         for iteration, batch in enumerate(dataloader):
             # Forward evaluation.
@@ -141,7 +141,7 @@ def evaluate(model, dataloader, eval_metric, args):
     model.eval()
     total_output, total_count = 0.0, 0
     total_tokens = 0
-    with flow.no_grad():
+    with torch.no_grad():
         # For all the batches in the dataset.
         for iteration, batch in enumerate(dataloader):
             if (iteration + 1) % args.log_interval == 0:
@@ -153,8 +153,8 @@ def evaluate(model, dataloader, eval_metric, args):
             total_output += output.item()
             total_count += count
             total_tokens += batch['loss_mask'].sum().item()
-    totals = flow.cuda.FloatTensor([total_output, total_count, total_tokens])
-    flow.distributed.all_reduce(totals, group=mpu.get_data_parallel_group())
+    totals = torch.cuda.FloatTensor([total_output, total_count, total_tokens])
+    torch.distributed.all_reduce(totals, group=mpu.get_data_parallel_group())
     total_output, total_count, total_tokens = totals.tolist()
     return {eval_metric: total_output}, total_count
 

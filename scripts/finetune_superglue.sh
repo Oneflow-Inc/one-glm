@@ -17,7 +17,7 @@ DATESTR=$(date +"%m-%d-%H-%M")
 EXPERIMENT_NAME=${EXPERIMENT_NAME}-${DATESTR}
 
 mkdir logs
-python -m flow.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
+python -m torch.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
        --finetune \
        --cloze-eval \
        --experiment-name ${EXPERIMENT_NAME} \

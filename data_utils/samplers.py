@@ -17,8 +17,8 @@ import math
 import os
 import sys
 
-import oneflow  as flow
-from oneflow.utils import data
+import torch
+from torch.utils import data
 import numpy as np
 
 
@@ -61,16 +61,16 @@ class RandomSampler(data.sampler.Sampler):
 
     def __iter__(self):
         n = len(self.data_source)
-        g = flow.Generator()
+        g = torch.Generator()
         if self.epoch >= 0:
             g.manual_seed(self.epoch)
         if self.replacement:
             for _ in range(self.num_samples // 32):
-                yield from oneflow.randint(high=n, size=(32,), dtype=flow.int64, generator=g).tolist()
-            yield from oneflow.randint(high=n, size=(self.num_samples % 32,), dtype=flow.int64,
+                yield from torch.randint(high=n, size=(32,), dtype=torch.int64, generator=g).tolist()
+            yield from torch.randint(high=n, size=(self.num_samples % 32,), dtype=torch.int64,
                                      generator=g).tolist()
         else:
-            yield from oneflow.randperm(n, generator=self.generator).tolist()
+            yield from torch.randperm(n, generator=self.generator).tolist()
 
     def __len__(self):
         return self.num_samples

@@ -22,9 +22,9 @@ import re
 from typing import Dict, List, Optional
 
 import numpy as np
-import oneflow  as flow
-import oneflow.utils.data
-from oneflow.utils.data.dataloader import default_collate
+import torch
+import torch.utils.data
+from torch.utils.data.dataloader import default_collate
 
 import mpu
 
@@ -366,15 +366,13 @@ def build_data_loader(dataset, batch_size, num_workers, drop_last, shuffle=True,
     if only_rank0:
         rank, world_size = 0, 1
     else:
-        # world_size = mpu.get_data_parallel_world_size()
-        # rank = mpu.get_data_parallel_rank()
-        rank, world_size = 0, 1
-
-    sampler = flow.utils.data.distributed.DistributedSampler(
+        world_size = mpu.get_data_parallel_world_size()
+        rank = mpu.get_data_parallel_rank()
+    sampler = torch.utils.data.distributed.DistributedSampler(
         dataset, num_replicas=world_size, rank=rank, shuffle=shuffle)
 
     # Data loader. Note that batch size is the per GPU batch size.
-    data_loader = flow.utils.data.DataLoader(dataset,
+    data_loader = torch.utils.data.DataLoader(dataset,
                                               batch_size=batch_size,
                                               sampler=sampler,
                                               shuffle=False,

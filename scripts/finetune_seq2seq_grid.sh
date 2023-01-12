@@ -28,7 +28,7 @@ do
     for epoch in 5 10
     do
       HYPER=${lr}-${batch}-${epoch}
-      python -m flow.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
+      python -m torch.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
              --finetune \
              --experiment-name ${EXPERIMENT_NAME}/${HYPER} \
              --task ${TASK_NAME} \

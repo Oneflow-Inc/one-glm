@@ -12,16 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os 
+
+
 """Model and data parallel groups."""
-import oneflow  as flow
-import os
+
+import torch
+
 from .utils import ensure_divisibility
-
-LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
-RANK = int(os.getenv("RANK", -1))
-WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
-
 
 
 # Model parallel group that the current rank belongs to.
@@ -49,36 +46,36 @@ def initialize_model_parallel(model_parallel_size_):
     with a total of 16 GPUs, rank 0 to 7 belong to the first box and
     ranks 8 to 15 belong to the second box.
     """
-    # if flow.env.get_rank() == 0:
-    #     print('> initializing model parallel with size {}'.format(
-    #         model_parallel_size_))
-    # # Get world size and rank. Ensure some consistencies.
-    # assert flow.distributed.is_initialized()
-    world_size = 1 # int(os.getenv("WORLD_SIZE", 1)) # flow.distributed.get_world_size()
+    if torch.distributed.get_rank() == 0:
+        print('> initializing model parallel with size {}'.format(
+            model_parallel_size_))
+    # Get world size and rank. Ensure some consistencies.
+    assert torch.distributed.is_initialized()
+    world_size = torch.distributed.get_world_size()
     model_parallel_size = min(model_parallel_size_, world_size)
     ensure_divisibility(world_size, model_parallel_size)
-    rank = 0 # flow.env.get_rank()
+    rank = torch.distributed.get_rank()
 
     # Build the data parallel groups.
-    # global _DATA_PARALLEL_GROUP
-    # assert _DATA_PARALLEL_GROUP is None, \
-    #     'data parallel group is already initialized'
-    # for i in range(model_parallel_size):
-    #     ranks = range(i, world_size, model_parallel_size)
-    #     group = flow.distributed.new_group(ranks)
-    #     if i == (rank % model_parallel_size):
-    #         _DATA_PARALLEL_GROUP = group
+    global _DATA_PARALLEL_GROUP
+    assert _DATA_PARALLEL_GROUP is None, \
+        'data parallel group is already initialized'
+    for i in range(model_parallel_size):
+        ranks = range(i, world_size, model_parallel_size)
+        group = torch.distributed.new_group(ranks)
+        if i == (rank % model_parallel_size):
+            _DATA_PARALLEL_GROUP = group
 
-    # # Build the model parallel groups.
-    # global _MODEL_PARALLEL_GROUP
-    # assert _MODEL_PARALLEL_GROUP is None, \
-    #     'model parallel group is already initialized'
-    # for i in range(world_size // model_parallel_size):
-    #     ranks = range(i * model_parallel_size,
-    #                   (i + 1) * model_parallel_size)
-    #     group = flow.distributed.new_group(ranks)
-    #     if i == (rank // model_parallel_size):
-    #         _MODEL_PARALLEL_GROUP = group
+    # Build the model parallel groups.
+    global _MODEL_PARALLEL_GROUP
+    assert _MODEL_PARALLEL_GROUP is None, \
+        'model parallel group is already initialized'
+    for i in range(world_size // model_parallel_size):
+        ranks = range(i * model_parallel_size,
+                      (i + 1) * model_parallel_size)
+        group = torch.distributed.new_group(ranks)
+        if i == (rank // model_parallel_size):
+            _MODEL_PARALLEL_GROUP = group
 
 
 def model_parallel_is_initialized():
@@ -88,11 +85,11 @@ def model_parallel_is_initialized():
     return True
 
 
-# def get_model_parallel_group():
-#     """Get the model parallel group the caller rank belongs to."""
-#     assert _MODEL_PARALLEL_GROUP is not None, \
-#         'model parallel group is not initialized'
-#     return _MODEL_PARALLEL_GROUP
+def get_model_parallel_group():
+    """Get the model parallel group the caller rank belongs to."""
+    assert _MODEL_PARALLEL_GROUP is not None, \
+        'model parallel group is not initialized'
+    return _MODEL_PARALLEL_GROUP
 
 
 def get_data_parallel_group():
@@ -104,34 +101,30 @@ def get_data_parallel_group():
 
 def get_model_parallel_world_size():
     """Return world size for the model parallel group."""
-    return 1
-    # return flow.distributed.get_world_size(group=get_model_parallel_group())
+    return torch.distributed.get_world_size(group=get_model_parallel_group())
 
 
 def get_model_parallel_rank():
     """Return my rank for the model parallel group."""
-    return 0
-    # return flow.distributed.get_rank(group=get_model_parallel_group())
+    return torch.distributed.get_rank(group=get_model_parallel_group())
 
 
 def get_model_parallel_src_rank():
     """Calculate the global rank corresponding to a local rank zeor
     in the model parallel group."""
-    global_rank = flow.env.get_rank()
+    global_rank = torch.distributed.get_rank()
     local_world_size = get_model_parallel_world_size()
     return (global_rank // local_world_size) * local_world_size
 
 
 def get_data_parallel_world_size():
     """Return world size for the data parallel group."""
-    return 1
-    return flow.distributed.get_world_size(group=get_data_parallel_group())
+    return torch.distributed.get_world_size(group=get_data_parallel_group())
 
 
 def get_data_parallel_rank():
     """Return my rank for the data parallel group."""
-    return RANK
-    # return flow.distributed.get_rank(group=get_data_parallel_group())
+    return torch.distributed.get_rank(group=get_data_parallel_group())
 
 
 def destroy_model_parallel():

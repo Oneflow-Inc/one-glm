@@ -91,7 +91,7 @@ def get_command(model, task, n_gpu, config, overwrite=True):
     hyper = "-".join([f"{k}-{v}" for k,v in config.items()])
     experiment_name = f"{model}-{task}/{hyper}"
 
-    command = (f"python -m flow.distributed.launch {distributed_args} finetune_gpt2.py "
+    command = (f"python -m torch.distributed.launch {distributed_args} finetune_gpt2.py "
        f"--finetune {MODEL_CONFIG[model]} {TASK_CONFIG[task]} {COMMON_ARGS} "
        f"--experiment-name {experiment_name} "
        f"--save {CHECKPOINT_PATH} "

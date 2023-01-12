@@ -19,7 +19,7 @@ EXPERIMENT_NAME=${EXPERIMENT_NAME}  #-${DATESTR}
 TOKENIZERS_PARALLELISM=false
 
 mkdir logs
-python -m flow.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
+python -m torch.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
        --finetune \
        --experiment-name ${EXPERIMENT_NAME} \
        --task ${TASK_NAME} \

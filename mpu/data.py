@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import oneflow  as flow
+import torch
 
-# # from .initialize import get_model_parallel_group
+from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_src_rank
 
@@ -46,9 +46,9 @@ def _build_key_size_numel_dictionaries(keys, data):
             offset += max_dim
 
     # Move to GPU and broadcast.
-    sizes_cuda = flow.cuda.LongTensor(sizes)
-    # flow.distributed.broadcast(sizes_cuda, get_model_parallel_src_rank(),
-    #                             group=get_model_parallel_group())
+    sizes_cuda = torch.cuda.LongTensor(sizes)
+    torch.distributed.broadcast(sizes_cuda, get_model_parallel_src_rank(),
+                                group=get_model_parallel_group())
 
     # Move back to cpu and unpack.
     sizes_cpu = sizes_cuda.cpu()
@@ -93,15 +93,16 @@ def broadcast_data(keys, data, datatype):
         # Check that all keys have the same data type.
         _check_data_types(keys, data, datatype)
         # Flatten the data associated with the keys
-        flatten_data = flow.cat(
+        flatten_data = torch.cat(
             [data[key].contiguous().view(-1) for key in keys], dim=0).cuda()
     else:
-        flatten_data = flow.empty(total_numel,
-                                   dtype=datatype).cuda()
+        flatten_data = torch.empty(total_numel,
+                                   device=torch.cuda.current_device(),
+                                   dtype=datatype)
 
     # Boradcast
-    # flow.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),
-    #                             group=get_model_parallel_group())
+    torch.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),
+                                group=get_model_parallel_group())
 
     # Unpack
     output = {}

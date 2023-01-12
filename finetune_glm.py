@@ -14,8 +14,8 @@ from pretrain_glm import forward_step as lm_forward_step
 import pathlib
 import mpu
 
-import oneflow  as flow
-import oneflow.utils.data
+import torch
+import torch.utils.data
 from configure_data import prepare_tokenizer
 
 from utils import print_rank_0
@@ -48,7 +48,7 @@ def process_batch(batch, args):
     if args.variable_num_choices:
         keys.append("loss_mask")
     # Broadcast data.
-    datatype = flow.int64
+    datatype = torch.int64
     data_b = mpu.broadcast_data(keys, batch, datatype)
 
     if "padding_mask" in data_b:
@@ -68,8 +68,8 @@ def mix_forward_step(batch_and_dataloader, model, args, times, mems):
         if mpu.get_model_parallel_rank() == 0:
             if random.random() > 1 / (1 + args.block_lm_ratio):
                 use_blocklm = 1
-        use_blocklm = flow.cuda.LongTensor([use_blocklm])
-        flow.distributed.broadcast(use_blocklm, mpu.get_model_parallel_src_rank(),
+        use_blocklm = torch.cuda.LongTensor([use_blocklm])
+        torch.distributed.broadcast(use_blocklm, mpu.get_model_parallel_src_rank(),
                                     group=mpu.get_model_parallel_group())
         use_blocklm = use_blocklm.item()
     if use_blocklm:
@@ -121,7 +121,7 @@ def finetune_forward_step(batch, model, args, timers, mems):
 
     if args.adapet:
         batch_size, num_classes = logits.size()[:2]
-        label_mask = flow.ones(batch_size, num_classes, device=logits.device)
+        label_mask = torch.ones(batch_size, num_classes, device=logits.device)
         label_mask.scatter_(1, labels.unsqueeze(1), -1.0)
         if "loss_mask" in data:
             loss_mask = data["loss_mask"]
@@ -139,7 +139,7 @@ def finetune_forward_step(batch, model, args, timers, mems):
             logits = logits * loss_mask - 10000.0 * (1.0 - loss_mask)
         if args.loss_func == "cross_entropy":
             # Cross-entropy loss.
-            loss_func = flow.nn.CrossEntropyLoss()
+            loss_func = torch.nn.CrossEntropyLoss()
             loss = loss_func(logits.contiguous().float(), labels)
         elif args.loss_func == "hinge":
             correct_logits = logits[range(logits.size(0)), labels]
@@ -150,7 +150,7 @@ def finetune_forward_step(batch, model, args, timers, mems):
             batch_size = logits.size(0)
             loss = - logits[range(batch_size), labels].mean()
             if args.loss_func == "mix":
-                loss_func = flow.nn.CrossEntropyLoss()
+                loss_func = torch.nn.CrossEntropyLoss()
                 loss = loss + loss_func(logits.contiguous().float(), labels)
         else:
             raise NotImplementedError
@@ -269,13 +269,13 @@ def _train(model, optimizer, lr_scheduler, forward_step,
                     print_rank_0(f"Found best {validation_metric} {best_score} at {best_iteration}")
                     save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args, tag="best", barrier=False,
                                     only_changed_parameters=True, no_deepspeed=True, no_save_optim=True)
-                    if flow.env.get_rank() == 0:
+                    if torch.distributed.get_rank() == 0:
                         score_dict.update({"type": "validation", "epoch": epoch})
                         with open(os.path.join(args.log_dir, "results.json"), "w") as output:
                             output.write(json.dumps(score_dict) + "\n")
                         with open(os.path.join(args.save, "best_checkpointed_iteration.txt"), "w") as output:
                             output.write(str(best_iteration))
-    flow.distributed.barrier()
+    torch.distributed.barrier()
     return best_iteration
 
 
@@ -298,10 +298,10 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
             train_dataloader, valid_dataloader = _build_train_valid_dataloaders(train_dataset, valid_dataset, args)
             if args.no_validation:
                 valid_dataloader = None
-            train_iters = flow.cuda.LongTensor([len(train_dataloader)])
+            train_iters = torch.cuda.LongTensor([len(train_dataloader)])
         else:
-            train_iters = flow.cuda.LongTensor([0])
-        flow.distributed.broadcast(train_iters, mpu.get_model_parallel_src_rank(),
+            train_iters = torch.cuda.LongTensor([0])
+        torch.distributed.broadcast(train_iters, mpu.get_model_parallel_src_rank(),
                                     group=mpu.get_model_parallel_group())
         if mpu.get_model_parallel_rank() != 0:
             args.train_iters_per_epoch = train_iters[0].item()
@@ -363,16 +363,16 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
                 num_task_tokens = len(task_tokens)
             else:
                 num_task_tokens, task_tokens = 0, []
-            num_task_tokens = flow.cuda.LongTensor([num_task_tokens])
-            flow.distributed.broadcast(num_task_tokens, mpu.get_model_parallel_src_rank(),
+            num_task_tokens = torch.cuda.LongTensor([num_task_tokens])
+            torch.distributed.broadcast(num_task_tokens, mpu.get_model_parallel_src_rank(),
                                         group=mpu.get_model_parallel_group())
             num_task_tokens = num_task_tokens.item()
             if num_task_tokens > 0:
                 if mpu.get_model_parallel_rank() == 0:
-                    task_tokens = flow.cuda.LongTensor(task_tokens)
+                    task_tokens = torch.cuda.LongTensor(task_tokens)
                 else:
-                    task_tokens = flow.empty(num_task_tokens, device=flow.cuda.current_device(), dtype=flow.long)
-                flow.distributed.broadcast(task_tokens, mpu.get_model_parallel_src_rank(),
+                    task_tokens = torch.empty(num_task_tokens, device=torch.cuda.current_device(), dtype=torch.long)
+                torch.distributed.broadcast(task_tokens, mpu.get_model_parallel_src_rank(),
                                             group=mpu.get_model_parallel_group())
                 task_tokens = task_tokens.tolist()
         with FileLock(os.path.join(pathlib.Path.home(), "checkpoint_lock"), timeout=-1):
@@ -394,11 +394,11 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
                 optimizer.refresh_fp32_params()
             else:
                 optimizer._model_params_to_master_params()
-    flow.distributed.barrier()
+    torch.distributed.barrier()
     timers('pretrained checkpoint').stop()
     args.iteration = 0
     summary_writer = None
-    if flow.env.get_rank() == 0:
+    if torch.distributed.get_rank() == 0:
         args.log_dir = get_log_dir(base=args.summary_dir, name=args.experiment_name)
         if os.path.exists(os.path.join(args.log_dir, "test_results.json")) and args.load is None and not args.overwrite:
             raise ValueError("Output directory ({}) already exists and is not empty.".format(args.log_dir))
@@ -425,7 +425,7 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
                 args.load = os.path.join(args.save, "best")
                 load_checkpoint(model, optimizer, lr_scheduler, args, no_load_optim=True, no_deepspeed=True)
                 args.load = None
-        flow.distributed.barrier()
+        torch.distributed.barrier()
         if end_of_train_callback is not None:
             score_dict = end_of_train_callback(model, epoch=-1, output_predictions=True)
     # Or just evaluate.
@@ -433,7 +433,7 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
         if end_of_train_callback is not None:
             print_rank_0('evaluation only mode, setting epoch to -1')
             score_dict = end_of_train_callback(model, epoch=-1, output_predictions=True)
-    if score_dict is not None and flow.env.get_rank() == 0:
+    if score_dict is not None and torch.distributed.get_rank() == 0:
         score_dict.update({"type": "test"})
         with open(os.path.join(args.log_dir, "test_results.json"), "w") as output:
             output.write(json.dumps(score_dict) + "\n")
@@ -443,7 +443,7 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
 
 if __name__ == '__main__':
     # Disable CuDNN.
-    flow.backends.cudnn.enabled = False
+    torch.backends.cudnn.enabled = False
 
     # Arguments.
     args = get_args()

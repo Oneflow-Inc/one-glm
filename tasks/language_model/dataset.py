@@ -1,4 +1,4 @@
-import oneflow  as flow
+import torch
 import json
 import math
 import numpy as np
@@ -9,7 +9,7 @@ from bisect import bisect_right
 from itertools import accumulate
 
 
-class LMDataset(flow.utils.data.Dataset):
+class LMDataset(torch.utils.data.Dataset):
     def __init__(self, args, documents, tokenizer, num_original_tokens, num_tokenized_tokens):
         self.args = args
         self.documents = documents
@@ -70,7 +70,7 @@ class LMDataset(flow.utils.data.Dataset):
             return {'text': np.array(tokens, dtype=np.int64), 'loss_mask': np.array(loss_masks, dtype=np.int64)}
 
 
-class LambadaDataset(flow.utils.data.Dataset):
+class LambadaDataset(torch.utils.data.Dataset):
     def __init__(self, args, tokenizer, strict=True):
         data_path = args.valid_data[0]
         print_rank_0('> building lambada dataset from {} ...'.format(data_path))

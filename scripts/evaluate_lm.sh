@@ -8,7 +8,7 @@ DATESTR=$(date +"%m-%d-%H-%M")
 source $1    # Model
 source $2    # Task
 
-python -m flow.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
+python -m torch.distributed.launch $DISTRIBUTED_ARGS finetune_glm.py \
        --deepspeed \
        --finetune \
        --experiment-name ${EXPERIMENT_NAME} \

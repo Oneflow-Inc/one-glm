@@ -17,11 +17,11 @@ from abc import ABC, abstractmethod
 from collections import UserDict
 from typing import Optional, Tuple, List, Iterable
 
-import oneflow  as flow
+import torch
 
 PROCESS_INPUTS_DOCSTRING = r"""
     Args:
-        input_ids (:obj:`flow.LongTensor` of shape :obj:`(batch_size * num_beams, sequence_length)`):
+        input_ids (:obj:`torch.LongTensor` of shape :obj:`(batch_size * num_beams, sequence_length)`):
             Indices of input sequence tokens in the vocabulary.
 
             Indices can be obtained using any class inheriting from :class:`~transformers.PretrainedTokenizer`. See
@@ -29,11 +29,11 @@ PROCESS_INPUTS_DOCSTRING = r"""
             details.
 
             `What are input IDs? <../glossary.html#input-ids>`__
-        next_scores (:obj:`flow.FloatTensor` of shape :obj:`(batch_size, 2 * num_beams)`):
+        next_scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, 2 * num_beams)`):
             Current scores of the top :obj:`2 * num_beams` non-finished beam hypotheses.
-        next_tokens (:obj:`flow.LongTensor` of shape :obj:`(batch_size, 2 * num_beams)`):
+        next_tokens (:obj:`torch.LongTensor` of shape :obj:`(batch_size, 2 * num_beams)`):
             :obj:`input_ids` of the tokens corresponding to the top :obj:`2 * num_beams` non-finished beam hypotheses.
-        next_indices (:obj:`flow.LongTensor` of shape :obj:`(batch_size, 2 * num_beams)`):
+        next_indices (:obj:`torch.LongTensor` of shape :obj:`(batch_size, 2 * num_beams)`):
             Beam indices indicating to which beam hypothesis the :obj:`next_tokens` correspond.
         pad_token_id (:obj:`int`, `optional`):
             The id of the `padding` token.
@@ -43,18 +43,18 @@ PROCESS_INPUTS_DOCSTRING = r"""
     Return:
         :obj:`UserDict`: A dictionary composed of the fields as defined above:
 
-            - **next_beam_scores** (:obj:`flow.FloatTensor` of shape :obj:`(batch_size * num_beams)`) -- Updated
+            - **next_beam_scores** (:obj:`torch.FloatTensor` of shape :obj:`(batch_size * num_beams)`) -- Updated
               scores of all non-finished beams.
-            - **next_beam_tokens** (:obj:`flow.FloatTensor` of shape :obj:`(batch_size * num_beams)`) -- Next tokens
+            - **next_beam_tokens** (:obj:`torch.FloatTensor` of shape :obj:`(batch_size * num_beams)`) -- Next tokens
               to be added to the non-finished beam_hypotheses.
-            - **next_beam_indices** (:obj:`flow.FloatTensor` of shape :obj:`(batch_size * num_beams)`) -- Beam indices
+            - **next_beam_indices** (:obj:`torch.FloatTensor` of shape :obj:`(batch_size * num_beams)`) -- Beam indices
               indicating to which beam the next tokens shall be added.
 
 """
 
 FINALIZE_INPUTS_DOCSTRING = r"""
     Args:
-        input_ids (:obj:`flow.LongTensor` of shape :obj:`(batch_size * num_beams, sequence_length)`):
+        input_ids (:obj:`torch.LongTensor` of shape :obj:`(batch_size * num_beams, sequence_length)`):
             Indices of input sequence tokens in the vocabulary.
 
             Indices can be obtained using any class inheriting from :class:`~transformers.PretrainedTokenizer`. See
@@ -62,11 +62,11 @@ FINALIZE_INPUTS_DOCSTRING = r"""
             details.
 
             `What are input IDs? <../glossary.html#input-ids>`__
-        final_beam_scores (:obj:`flow.FloatTensor` of shape :obj:`(batch_size * num_beams)`):
+        final_beam_scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size * num_beams)`):
             The final scores of all non-finished beams.
-        final_beam_tokens (:obj:`flow.FloatTensor` of shape :obj:`(batch_size * num_beams)`):
+        final_beam_tokens (:obj:`torch.FloatTensor` of shape :obj:`(batch_size * num_beams)`):
             The last tokens to be added to the non-finished beam_hypotheses.
-        final_beam_indices (:obj:`flow.FloatTensor` of shape :obj:`(batch_size * num_beams)`):
+        final_beam_indices (:obj:`torch.FloatTensor` of shape :obj:`(batch_size * num_beams)`):
             The beam indices indicating to which beam the :obj:`final_beam_tokens` shall be added.
         pad_token_id (:obj:`int`, `optional`):
             The id of the `padding` token.
@@ -74,7 +74,7 @@ FINALIZE_INPUTS_DOCSTRING = r"""
             The id of the `end-of-sequence` token.
 
     Return:
-        :obj:`flow.LongTensor` of shape :obj:`(batch_size * num_return_sequences, sequence_length)`: The generated
+        :obj:`torch.LongTensor` of shape :obj:`(batch_size * num_return_sequences, sequence_length)`: The generated
         sequences. The second dimension (sequence_length) is either equal to :obj:`max_length` or shorter if all
         batches finished early due to the :obj:`eos_token_id`.
 
@@ -90,23 +90,23 @@ class BeamScorer(ABC):
     @abstractmethod
     def process(
             self,
-            input_ids: flow.LongTensor,
-            next_scores: flow.FloatTensor,
-            next_tokens: flow.LongTensor,
-            next_indices: flow.LongTensor,
+            input_ids: torch.LongTensor,
+            next_scores: torch.FloatTensor,
+            next_tokens: torch.LongTensor,
+            next_indices: torch.LongTensor,
             **kwargs
-    ) -> Tuple[flow.Tensor]:
+    ) -> Tuple[torch.Tensor]:
         raise NotImplementedError("This is an abstract method.")
 
     @abstractmethod
     def finalize(
             self,
-            input_ids: flow.LongTensor,
-            next_scores: flow.FloatTensor,
-            next_tokens: flow.LongTensor,
-            next_indices: flow.LongTensor,
+            input_ids: torch.LongTensor,
+            next_scores: torch.FloatTensor,
+            next_tokens: torch.LongTensor,
+            next_indices: torch.LongTensor,
             **kwargs
-    ) -> flow.LongTensor:
+    ) -> torch.LongTensor:
         raise NotImplementedError("This is an abstract method.")
 
 
@@ -124,7 +124,7 @@ class BeamSearchScorer(BeamScorer):
             The maximum length of the sequence to be generated.
         num_beams (:obj:`int`):
             Number of beams for beam search.
-        device (:obj:`flow.device`):
+        device (:obj:`torch.device`):
             Defines the device type (*e.g.*, :obj:`"cpu"` or :obj:`"cuda"`) on which this instance of
             :obj:`BeamSearchScorer` will be allocated.
         length_penalty (:obj:`float`, `optional`, defaults to 1.0):
@@ -143,7 +143,7 @@ class BeamSearchScorer(BeamScorer):
             batch_size: int,
             max_length: int,
             num_beams: int,
-            device: flow.device,
+            device: torch.device,
             length_penalty: Optional[float] = 1.0,
             do_early_stopping: Optional[bool] = False,
             num_beam_hyps_to_keep: Optional[int] = 1,
@@ -165,7 +165,7 @@ class BeamSearchScorer(BeamScorer):
             )
             for _ in range(batch_size)
         ]
-        self._done = flow.tensor([False for _ in range(batch_size)], dtype=flow.bool, device=self.device)
+        self._done = torch.tensor([False for _ in range(batch_size)], dtype=torch.bool, device=self.device)
 
         # if not isinstance(num_beams, int) or num_beams <= 1:
         #     raise ValueError(
@@ -178,23 +178,23 @@ class BeamSearchScorer(BeamScorer):
 
     def process(
             self,
-            input_ids: flow.LongTensor,
-            next_scores: flow.FloatTensor,
-            next_tokens: flow.LongTensor,
-            next_indices: flow.LongTensor,
+            input_ids: torch.LongTensor,
+            next_scores: torch.FloatTensor,
+            next_tokens: torch.LongTensor,
+            next_indices: torch.LongTensor,
             pad_token_id: Optional[int] = None,
             eos_token_id: Optional[int] = None,
             mems=None
-    ) -> Tuple[flow.Tensor]:
+    ) -> Tuple[torch.Tensor]:
         cur_len = input_ids.shape[-1]
         batch_size = len(self._beam_hyps)
         assert batch_size == (input_ids.shape[0] // self.num_beams)
         if isinstance(eos_token_id, int):
             eos_token_id = [eos_token_id]
         device = next_scores.device
-        next_beam_scores = flow.zeros((batch_size, self.num_beams), dtype=next_scores.dtype, device=device)
-        next_beam_tokens = flow.zeros((batch_size, self.num_beams), dtype=next_tokens.dtype, device=device)
-        next_beam_indices = flow.zeros((batch_size, self.num_beams), dtype=next_indices.dtype, device=device)
+        next_beam_scores = torch.zeros((batch_size, self.num_beams), dtype=next_scores.dtype, device=device)
+        next_beam_tokens = torch.zeros((batch_size, self.num_beams), dtype=next_tokens.dtype, device=device)
+        next_beam_indices = torch.zeros((batch_size, self.num_beams), dtype=next_indices.dtype, device=device)
 
         for batch_idx, beam_hyp in enumerate(self._beam_hyps):
             if self._done[batch_idx]:
@@ -258,14 +258,14 @@ class BeamSearchScorer(BeamScorer):
 
     def finalize(
             self,
-            input_ids: flow.LongTensor,
-            final_beam_scores: flow.FloatTensor,
-            final_beam_tokens: flow.LongTensor,
-            final_beam_indices: flow.LongTensor,
+            input_ids: torch.LongTensor,
+            final_beam_scores: torch.FloatTensor,
+            final_beam_tokens: torch.LongTensor,
+            final_beam_indices: torch.LongTensor,
             pad_token_id: Optional[int] = None,
             eos_token_id: Optional[int] = None,
             mems=None
-    ) -> Tuple[flow.LongTensor, List[flow.Tensor]]:
+    ) -> Tuple[torch.LongTensor, List[torch.Tensor]]:
         batch_size = len(self._beam_hyps)
 
         # finalize all open beam hypotheses and add to generated hypotheses
@@ -294,7 +294,7 @@ class BeamSearchScorer(BeamScorer):
 
         # prepare for adding eos
         sent_max_len = sent_lengths.max().item()
-        decoded: flow.LongTensor = input_ids.new(batch_size * self.num_beam_hyps_to_keep, sent_max_len)
+        decoded: torch.LongTensor = input_ids.new(batch_size * self.num_beam_hyps_to_keep, sent_max_len)
         scores = final_beam_scores.new(batch_size * self.num_beam_hyps_to_keep)
         # shorter batches are padded if needed
         if sent_lengths.min().item() != sent_lengths.max().item():
@@ -309,7 +309,7 @@ class BeamSearchScorer(BeamScorer):
             if sent_lengths[i] < sent_max_len:
                 decoded[i, sent_lengths[i]] = eos_token_id
             mems.append(mem)
-        mems = [flow.cat([mem[i] for mem in mems], dim=0) for i in range(len(mems[0]))] if mems and mems[0] else None
+        mems = [torch.cat([mem[i] for mem in mems], dim=0) for i in range(len(mems[0]))] if mems and mems[0] else None
         return decoded, mems, scores
 
 
@@ -331,7 +331,7 @@ class BeamHypotheses:
         """
         return len(self.beams)
 
-    def add(self, hyp: flow.LongTensor, sum_logprobs: float, mems=None):
+    def add(self, hyp: torch.LongTensor, sum_logprobs: float, mems=None):
         """
         Add a new hypothesis to the list.
         """
@@ -364,7 +364,7 @@ class BeamHypotheses:
 class LogitsProcessor(ABC):
     """Abstract base class for all logit processors that can be applied during generation."""
 
-    def __call__(self, input_ids: flow.LongTensor, scores: flow.FloatTensor) -> flow.FloatTensor:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         """Torch method for processing logits."""
         raise NotImplementedError(
             f"{self.__class__} is an abstract class. Only classes inheriting this class can be called."
@@ -379,7 +379,7 @@ class LogitsProcessorList(list):
     :class:`~transformers.LogitsProcessor` to the inputs.
     """
 
-    def __call__(self, input_ids: flow.LongTensor, scores: flow.FloatTensor) -> flow.FloatTensor:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         for processor in self:
             scores = processor(input_ids, scores)
         return scores
@@ -406,7 +406,7 @@ class MinLengthLogitsProcessor(LogitsProcessor):
         self.min_length = min_length
         self.eos_token_id = eos_token_id
 
-    def __call__(self, input_ids: flow.LongTensor, scores: flow.FloatTensor) -> flow.FloatTensor:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         cur_len = input_ids.shape[-1]
         if cur_len < self.min_length:
             scores[:, self.eos_token_id] = -float("inf")
@@ -428,7 +428,7 @@ class NoRepeatNGramLogitsProcessor(LogitsProcessor):
             raise ValueError(f"`ngram_size` has to be a strictly positive integer, but is {ngram_size}")
         self.ngram_size = ngram_size
 
-    def __call__(self, input_ids: flow.LongTensor, scores: flow.FloatTensor) -> flow.FloatTensor:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         num_batch_hypotheses = scores.shape[0]
         cur_len = input_ids.shape[-1]
         banned_batch_tokens = self._calc_banned_ngram_tokens(input_ids, num_batch_hypotheses, cur_len)
@@ -439,7 +439,7 @@ class NoRepeatNGramLogitsProcessor(LogitsProcessor):
         return scores
 
     def _calc_banned_ngram_tokens(
-            self, prev_input_ids: flow.Tensor, num_hypos: int, cur_len: int
+            self, prev_input_ids: torch.Tensor, num_hypos: int, cur_len: int
     ) -> List[Iterable[int]]:
         """Copied from fairseq for no_repeat_ngram in beam_search"""
         if cur_len + 1 < self.ngram_size:

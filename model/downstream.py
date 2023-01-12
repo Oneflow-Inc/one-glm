@@ -1,11 +1,11 @@
 """Multiple choice model."""
 
-import oneflow  as flow
-import oneflow.nn
+import torch
+import torch.nn
 from .modeling_glm import GLMModel
 
 
-class GLMForMultiTokenCloze(flow.nn.Module):
+class GLMForMultiTokenCloze(torch.nn.Module):
     def __init__(self, language_model: GLMModel, take_softmax=True, length_penalty=0.0):
         super(GLMForMultiTokenCloze, self).__init__()
         self.model = language_model
@@ -38,11 +38,11 @@ class GLMForMultiTokenCloze(flow.nn.Module):
                 prompt_pos = prompt_pos.reshape(-1, prompt_pos.size(-1))
         outputs, *mems = self.model(input_ids, position_ids, attention_mask, prompt_pos=prompt_pos)
         if self.take_softmax:
-            outputs = flow.nn.functional.log_softmax(outputs, dim=-1)
+            outputs = torch.nn.functional.log_softmax(outputs, dim=-1)
         # select the target logits
-        batch_ids = flow.arange(target_ids.size(0), dtype=flow.long, device=target_ids.device)
+        batch_ids = torch.arange(target_ids.size(0), dtype=torch.long, device=target_ids.device)
         batch_ids = batch_ids.unsqueeze(1).expand_as(target_ids)
-        seq_ids = flow.arange(target_ids.size(-1), dtype=flow.long, device=target_ids.device)
+        seq_ids = torch.arange(target_ids.size(-1), dtype=torch.long, device=target_ids.device)
         seq_ids = seq_ids.unsqueeze(0).expand_as(target_ids)
         logits = outputs[batch_ids, seq_ids, target_ids]
         logits = (logits * logit_mask).sum(dim=1)
@@ -53,7 +53,7 @@ class GLMForMultiTokenCloze(flow.nn.Module):
         return (logits, *mems)
 
 
-class GLMForMultiTokenClozeFast(flow.nn.Module):
+class GLMForMultiTokenClozeFast(torch.nn.Module):
     def __init__(self, language_model, take_softmax=True, length_penalty=0.0):
         super(GLMForMultiTokenClozeFast, self).__init__()
         self.model = language_model
@@ -75,15 +75,15 @@ class GLMForMultiTokenClozeFast(flow.nn.Module):
 
         def build_dec_mask_matrix(seq_length, sep, memory_length=0):
             m = enc_mems[0].new_ones((1, seq_length, seq_length))
-            m = flow.tril(m)
+            m = torch.tril(m)
 
             # sep = dec_attention_mask
-            ids = flow.arange(memory_length, device=sep.device, dtype=sep.dtype).view(1, -1)
+            ids = torch.arange(memory_length, device=sep.device, dtype=sep.dtype).view(1, -1)
             mask = ids < sep.view(-1, 1)  # batch * mem
             mask = mask.unsqueeze(1).float().expand(-1, seq_length, -1)
 
             m = m.expand(batch_size * num_choices, -1, -1)
-            m = flow.cat((mask, m), dim=2)
+            m = torch.cat((mask, m), dim=2)
             m = m.unsqueeze(1)
             return m
 
@@ -96,11 +96,11 @@ class GLMForMultiTokenClozeFast(flow.nn.Module):
 
         outputs, *mems = self.model(dec_input_ids, dec_position_ids, dec_attention_mask, *enc_mems)
         if self.take_softmax:
-            outputs = flow.nn.functional.log_softmax(outputs, dim=-1)
+            outputs = torch.nn.functional.log_softmax(outputs, dim=-1)
 
-        batch_ids = flow.arange(dec_target_ids.size(0), dtype=flow.long, device=dec_target_ids.device)
+        batch_ids = torch.arange(dec_target_ids.size(0), dtype=torch.long, device=dec_target_ids.device)
         batch_ids = batch_ids.unsqueeze(1).expand_as(dec_target_ids)
-        seq_ids = flow.arange(dec_target_ids.size(-1), dtype=flow.long, device=dec_target_ids.device)
+        seq_ids = torch.arange(dec_target_ids.size(-1), dtype=torch.long, device=dec_target_ids.device)
         seq_ids = seq_ids.unsqueeze(0).expand_as(dec_target_ids)
         logits = outputs[batch_ids, seq_ids, dec_target_ids]
         logits = (logits * dec_logit_mask).sum(dim=1)
@@ -111,7 +111,7 @@ class GLMForMultiTokenClozeFast(flow.nn.Module):
         return (logits, *mems)
 
 
-class GLMForSingleTokenCloze(flow.nn.Module):
+class GLMForSingleTokenCloze(torch.nn.Module):
     def __init__(self, language_model, take_softmax=False):
         super().__init__()
         self.model = language_model
@@ -133,10 +133,10 @@ class GLMForSingleTokenCloze(flow.nn.Module):
             return self.model(input_ids, position_ids, attention_mask)
         assert len(input_ids.shape) == 2
         outputs, *mems = self.model(input_ids, position_ids, attention_mask, prompt_pos=prompt_pos)
-        batch_ids = flow.arange(outputs.size(0), dtype=attention_mask.dtype, device=attention_mask.device)
+        batch_ids = torch.arange(outputs.size(0), dtype=attention_mask.dtype, device=attention_mask.device)
         target_logits = outputs[batch_ids, attention_mask]
         if self.take_softmax:
-            target_prob = flow.nn.functional.log_softmax(target_logits, dim=-1)
+            target_prob = torch.nn.functional.log_softmax(target_logits, dim=-1)
         else:
             target_prob = target_logits
         batch_ids = batch_ids.unsqueeze(1).expand_as(target_ids)
@@ -145,16 +145,16 @@ class GLMForSingleTokenCloze(flow.nn.Module):
         return (output, target_logits, *mems)
 
 
-class GLMForSequenceClassification(flow.nn.Module):
+class GLMForSequenceClassification(torch.nn.Module):
     def __init__(self, language_model, hidden_size, hidden_dropout, pool_token, num_class=1):
         super().__init__()
         self.pool_token = pool_token
         self.model = language_model
         self.num_class = num_class
         # Multi-choice head.
-        self.pool_layer = flow.nn.Linear(hidden_size, hidden_size)
-        self.multichoice_dropout = flow.nn.Dropout(hidden_dropout)
-        self.multichoice_head = flow.nn.Linear(hidden_size, num_class)
+        self.pool_layer = torch.nn.Linear(hidden_size, hidden_size)
+        self.multichoice_dropout = torch.nn.Dropout(hidden_dropout)
+        self.multichoice_head = torch.nn.Linear(hidden_size, num_class)
 
     def forward(self, input_ids, position_ids, attention_mask):
         num_choices = None
@@ -167,15 +167,15 @@ class GLMForSequenceClassification(flow.nn.Module):
         outputs, *mems = self.model(input_ids, position_ids, attention_mask)
         if self.pool_token == 'start':
             output = outputs[
-                flow.arange(outputs.size(0), dtype=attention_mask.dtype, device=attention_mask.device), attention_mask]
+                torch.arange(outputs.size(0), dtype=attention_mask.dtype, device=attention_mask.device), attention_mask]
         elif self.pool_token == 'pad':
-            output = outputs[flow.arange(outputs.size(0), dtype=attention_mask.dtype,
+            output = outputs[torch.arange(outputs.size(0), dtype=attention_mask.dtype,
                                           device=attention_mask.device), attention_mask - 1]
         elif self.pool_token == 'cls':
             output = outputs[:, 0]
         else:
             raise NotImplementedError
-        output = flow.tanh(self.pool_layer(output))
+        output = torch.tanh(self.pool_layer(output))
         multichoice_output = self.multichoice_dropout(output)
         logits = self.multichoice_head(multichoice_output)
         if num_choices is not None:

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import oneflow  as flow
+import torch
 import mpu
 
 # item() is a recent addition, so this helps with backward compatibility.
@@ -38,11 +38,11 @@ class LossScaler:
     def __init__(self, scale=1):
         self.cur_scale = scale
 
-    # `params` is a list / generator of flow.Variable
+    # `params` is a list / generator of torch.Variable
     def has_overflow(self, params):
         return False
 
-    # `x` is a flow.Tensor
+    # `x` is a torch.Tensor
     def _has_inf_or_nan(x):
         return False
 
@@ -103,7 +103,7 @@ class DynamicLossScaler:
         self.cur_hysteresis = delayed_shift
         self.consecutive_hysteresis = consecutive_hysteresis
 
-    # `params` is a list / generator of flow.Variable
+    # `params` is a list / generator of torch.Variable
     def has_overflow_serial(self, params):
         for p in params:
             if p.grad is not None and DynamicLossScaler._has_inf_or_nan(p.grad.data):
@@ -115,15 +115,15 @@ class DynamicLossScaler:
         overflow = self.has_overflow_serial(params)
         # Since each model parallel GPU carries only part of the model,
         # make sure overflow flag is synced across all the model parallel GPUs
-        overflow_gpu = flow.cuda.ByteTensor([overflow])
-        flow.distributed.all_reduce(overflow_gpu,
-                                     op=flow.distributed.ReduceOp.MAX,
+        overflow_gpu = torch.cuda.ByteTensor([overflow])
+        torch.distributed.all_reduce(overflow_gpu,
+                                     op=torch.distributed.ReduceOp.MAX,
                                      group=mpu.get_model_parallel_group())
         overflow = overflow_gpu[0].item()
         return bool(overflow)
 
 
-    # `x` is a flow.Tensor
+    # `x` is a torch.Tensor
     def _has_inf_or_nan(x):
         try:
             # if x is half, the .float() incurs an additional deep copy, but it's necessary if 
@@ -188,8 +188,8 @@ class DynamicLossScaler:
 """
 TO-DO separate out into an example.
 if __name__ == "__main__":
-    import oneflow  as flow
-    from oneflow.autograd import Variable
+    import torch
+    from torch.autograd import Variable
     from dynamic_loss_scaler import DynamicLossScaler
 
     # N is batch size; D_in is input dimension;
@@ -197,15 +197,15 @@ if __name__ == "__main__":
     N, D_in, H, D_out = 64, 1000, 100, 10
 
     # Create random Tensors to hold inputs and outputs, and wrap them in Variables.
-    x = Variable(flow.randn(N, D_in), requires_grad=False)
-    y = Variable(flow.randn(N, D_out), requires_grad=False)
+    x = Variable(torch.randn(N, D_in), requires_grad=False)
+    y = Variable(torch.randn(N, D_out), requires_grad=False)
 
-    w1 = Variable(flow.randn(D_in, H), requires_grad=True)
-    w2 = Variable(flow.randn(H, D_out), requires_grad=True)
+    w1 = Variable(torch.randn(D_in, H), requires_grad=True)
+    w2 = Variable(torch.randn(H, D_out), requires_grad=True)
     parameters = [w1, w2]
 
     learning_rate = 1e-6
-    optimizer = flow.optim.SGD(parameters, lr=learning_rate)
+    optimizer = torch.optim.SGD(parameters, lr=learning_rate)
     loss_scaler = DynamicLossScaler()
 
     for t in range(500):

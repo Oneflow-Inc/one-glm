@@ -18,21 +18,17 @@
 # repo: https://github.com/pytorch/pytorch
 
 
-import oneflow  as flow
+import torch
+from torch._six import inf
 
-# from oneflow._six import inf
-import math
-inf = math.inf
-
-
-# # from .initialize import get_model_parallel_group
+from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
 
 
 def clip_grad_norm(parameters, max_norm, norm_type=2):
     """Clips gradient norm of an iterable of parameters.
 
-    This is adapted from oneflow.nn.utils.clip_grad.clip_grad_norm_ and
+    This is adapted from torch.nn.utils.clip_grad.clip_grad_norm_ and
     added functionality to handle model parallel parameters. Note that
     the gradients are modified in place.
 
@@ -46,20 +42,17 @@ def clip_grad_norm(parameters, max_norm, norm_type=2):
     Returns:
         Total norm of the parameters (viewed as a single vector).
     """
-    return 
-
-    
-    if isinstance(parameters, flow.Tensor):
+    if isinstance(parameters, torch.Tensor):
         parameters = [parameters]
     parameters = list(filter(lambda p: p.grad is not None, parameters))
     max_norm = float(max_norm)
     norm_type = float(norm_type)
     if norm_type == inf:
         total_norm = max(p.grad.data.abs().max() for p in parameters)
-        total_norm_cuda = flow.cuda.FloatTensor([float(total_norm)])
+        total_norm_cuda = torch.cuda.FloatTensor([float(total_norm)])
         # Take max across all GPUs.
-        flow.distributed.all_reduce(total_norm_cuda,
-                                     op=flow.distributed.ReduceOp.MAX,
+        torch.distributed.all_reduce(total_norm_cuda,
+                                     op=torch.distributed.ReduceOp.MAX,
                                      group=get_model_parallel_group())
         total_norm = total_norm_cuda[0].item()
     else:
@@ -69,9 +62,9 @@ def clip_grad_norm(parameters, max_norm, norm_type=2):
                 param_norm = p.grad.data.norm(norm_type)
                 total_norm += param_norm.item() ** norm_type
         # Sum across all model parallel GPUs.
-        total_norm_cuda = flow.cuda.FloatTensor([float(total_norm)])
-        flow.distributed.all_reduce(total_norm_cuda,
-                                     op=flow.distributed.ReduceOp.SUM,
+        total_norm_cuda = torch.cuda.FloatTensor([float(total_norm)])
+        torch.distributed.all_reduce(total_norm_cuda,
+                                     op=torch.distributed.ReduceOp.SUM,
                                      group=get_model_parallel_group())
         total_norm = total_norm_cuda[0].item() ** (1. / norm_type)
     clip_coef = max_norm / (total_norm + 1e-6)

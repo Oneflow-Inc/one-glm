@@ -15,9 +15,9 @@
 
 """GPT-2 model."""
 
-import oneflow  as flow
-import oneflow.nn as nn
-import oneflow.nn.functional as F
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 import mpu
 from model.prompt import PromptSpell
@@ -32,12 +32,12 @@ def init_method_normal(std=0.02):
     """
 
     def init_(tensor):
-        return flow.nn.init.normal_(tensor, mean=0.0, std=std)
+        return torch.nn.init.normal_(tensor, mean=0.0, std=std)
 
     return init_
 
 
-class GLMModel(flow.nn.Module):
+class GLMModel(torch.nn.Module):
     """GLM Language model.
 
     The output of the forward method are the logits (parallel or
@@ -108,16 +108,12 @@ class GLMModel(flow.nn.Module):
                 prompt_pos=None):
         # Embeddings.
         batch_size = input_ids.size(0)
-      
         words_embeddings = self.word_embeddings(input_ids)
-        # print(f'{words_embeddings=}')
         embeddings = words_embeddings
-        # print(f'{(prompt_pos is not None)=}')
-        # False
         if prompt_pos is not None:
             embeddings = embeddings.clone()
             prompt_embeds = self.prompt_spell()
-            batch_index = flow.arange(batch_size, device=input_ids.device).unsqueeze(1)
+            batch_index = torch.arange(batch_size, device=input_ids.device).unsqueeze(1)
             embeddings[batch_index, prompt_pos] = prompt_embeds
         # Transformer.
         transformer_output = self.transformer(embeddings, position_ids, attention_mask, mems,
@@ -139,7 +135,7 @@ class GLMModel(flow.nn.Module):
             return (logits, *outputs)
 
 
-class EncoderDecoder(flow.nn.Module):
+class EncoderDecoder(torch.nn.Module):
     """Seq2Seq Transformer Model
     The output of the forward method are the logits (parallel or serial depending on the `parallel_output` flag).
     """
@@ -218,7 +214,7 @@ def glm_get_params_for_weight_decay_optimization(module):
     weight_decay_params = {'params': []}
     no_weight_decay_params = {'params': [], 'weight_decay': 0.0}
     for module_ in module.modules():
-        if isinstance(module_, (mpu.LayerNorm, flow.nn.LayerNorm)):
+        if isinstance(module_, (mpu.LayerNorm, torch.nn.LayerNorm)):
             no_weight_decay_params['params'].extend(
                 [p for p in list(module_._parameters.values())
                  if p is not None and p.requires_grad])
