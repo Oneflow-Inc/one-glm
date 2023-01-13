@@ -27,6 +27,4 @@ gpt_options=" \
        --lr-decay-iters 160000 \
        --lr-decay-ratio 0.05 \
        --warmup .05 \
-       --checkpoint-activations \
-       --deepspeed-activation-checkpointing \
 "
