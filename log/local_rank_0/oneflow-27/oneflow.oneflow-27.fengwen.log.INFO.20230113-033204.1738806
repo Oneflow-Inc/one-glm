@@ -1,6 +1,0 @@
-Log file created at: 2023/01/13 03:32:04
-Running on machine: oneflow-27
-Running duration (h:mm:ss): 0:00:00
-Log line format: [IWEF]yyyymmdd hh:mm:ss.uuuuuu threadid file:line] msg
-I20230113 03:32:04.861491 1738806 env_global_objects_scope.cpp:161] Using rpc backend: local
-I20230113 03:32:04.892460 1738806 epoll_comm_network.cpp:63] CommNet:Epoll listening on 0.0.0.0:40105
