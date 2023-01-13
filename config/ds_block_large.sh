@@ -15,8 +15,8 @@ gpt_options=" \
        --num-attention-heads 16 \
        --seq-length 512 \
        --max-position-embeddings 512 \
-       --save /root/data/checkpoints \
-       --train-iters 200000 \
+       --save /home/fengwen/datasets \
+       --train-iters 1000 \
        --resume-dataloader \
        --train-data bert-large \
        --tokenizer-type BertWordPieceTokenizer \
@@ -27,4 +27,5 @@ gpt_options=" \
        --lr-decay-iters 160000 \
        --lr-decay-ratio 0.05 \
        --warmup .05 \
+       --batch-size 1 \
 "

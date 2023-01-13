@@ -325,6 +325,10 @@ def train_step(data_iterator, model, optimizer, lr_scheduler, args, timers, forw
     """Single training step."""
     lm_loss_total, count = 0.0, 0
     mems = [] if mems is None else mems
+    timers('forward').start()
+    lm_loss, mems, _ = forward_step_func(data_iterator, model, args, timers, mems)
+    timers('forward').stop()
+    return lm_loss,0,mems
     if not args.deepspeed:
         optimizer.zero_grad()
     while True:

@@ -340,7 +340,6 @@ def train(model, optimizer, lr_scheduler,
                                                  args, timers, mems=mems, forward_step_func=forward_step)
         skipped_iters += skipped_iter
         args.iteration += 1
-
         # Update losses.
         total_lm_loss += lm_loss.data.detach().float()
 
@@ -362,14 +361,14 @@ def train(model, optimizer, lr_scheduler,
             #                     'batch generator', 'data loader'],
             #                    normalizer=args.log_interval, reset=False)
             #     torch.distributed.barrier()
-            if args.deepspeed or args.DDP_impl == 'torch':
-                timers.log(['forward', 'backward', 'optimizer',
-                            'batch generator', 'data loader'],
-                           normalizer=args.log_interval)
-            else:
-                timers.log(['forward', 'backward', 'allreduce', 'optimizer',
-                            'batch generator', 'data loader'],
-                           normalizer=args.log_interval)
+            # if args.deepspeed or args.DDP_impl == 'torch':
+            #     timers.log(['forward', 'backward', 'optimizer',
+            #                 'batch generator', 'data loader'],
+            #                normalizer=args.log_interval)
+            # else:
+            #     timers.log(['forward', 'backward', 'allreduce', 'optimizer',
+            #                 'batch generator', 'data loader'],
+            #                normalizer=args.log_interval)
         # Checkpointing
         if args.save and args.save_interval and args.iteration % args.save_interval == 0:
             save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args)
@@ -428,7 +427,7 @@ def evaluate(data_iterator, model, args, timers, forward_step_func, verbose=Fals
     loss_data = torch.cuda.FloatTensor(
         [total_lm_loss, total_gpt_loss, total_bert_loss, total_sent_loss, total_multi_loss, gpt_iters, bert_iters,
          sent_iters, multi_iters])
-    torch.distributed.all_reduce(loss_data, group=mpu.get_data_parallel_group())
+    # torch.distributed.all_reduce(loss_data, group=mpu.get_data_parallel_group())
     loss_data = loss_data.tolist()
     total_lm_loss = loss_data[0] / args.eval_iters / (args.world_size / args.model_parallel_size)
     total_gpt_loss = loss_data[1] / loss_data[5] if loss_data[5] > 0 else 0
@@ -541,7 +540,7 @@ def get_train_val_test_data(args, tokenizer):
 def main():
     """Main training program."""
 
-    # Disable CuDNN.
+    # Disable CuDNN.d
     torch.backends.cudnn.enabled = False
     # Timer.
     timers = Timers()
@@ -555,8 +554,7 @@ def main():
         args.experiment_name = args.experiment_name + datetime.now().strftime("%m-%d-%H-%M")
     if args.save:
         args.save = os.path.join(args.save, args.experiment_name)
-    # Pytorch distributed.
-    initialize_distributed(args)
+
 
     # Random seeds for reproducability.
     set_random_seed(args.seed)
@@ -572,17 +570,17 @@ def main():
     # Model, optimizer, and learning rate.
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
 
-    if args.load is not None:
-        with FileLock(os.path.join(pathlib.Path.home(), "checkpoint_lock"), timeout=-1):
-            args.iteration = load_checkpoint(model, optimizer, lr_scheduler, args, no_deepspeed=args.no_deepspeed_load)
-        if args.no_load_optim and args.fp16 and optimizer is not None:
-            if args.deepspeed:
-                optimizer.refresh_fp32_params()
-            else:
-                optimizer._model_params_to_master_params()
-    else:
-        args.iteration = 0
-    torch.distributed.barrier()
+    # if args.load is not None:
+    #     with FileLock(os.path.join(pathlib.Path.home(), "checkpoint_lock"), timeout=-1):
+    #         args.iteration = load_checkpoint(model, optimizer, lr_scheduler, args, no_deepspeed=args.no_deepspeed_load)
+    #     if args.no_load_optim and args.fp16 and optimizer is not None:
+    #         if args.deepspeed:
+    #             optimizer.refresh_fp32_params()
+    #         else:
+    #             optimizer._model_params_to_master_params()
+    # else:
+    args.iteration = 0
+
     if args.switch_linear:
         lr_scheduler.switch_linear(args)
 
@@ -630,9 +628,9 @@ def main():
     iteration = 0
     if args.train_iters > 0:
         if args.do_train:
-            with ExitStack() as stack:
-                def save_on_exit(args_, model_, optimizer_, lr_scheduler_):
-                    save_checkpoint(args_.iteration, model_, optimizer_, lr_scheduler_, args_)
+            # with ExitStack() as stack:
+            #     def save_on_exit(args_, model_, optimizer_, lr_scheduler_):
+            #         save_checkpoint(args_.iteration, model_, optimizer_, lr_scheduler_, args_)
 
                 # stack.callback(save_on_exit, args, model, optimizer, lr_scheduler)
                 iteration, skipped = train(model, optimizer,
@@ -640,7 +638,7 @@ def main():
                                            (train_data_iterator, multi_train_iterator),
                                            (val_data_iterator, multi_val_iterator),
                                            timers, args, summary_writer=summary_writer)
-
+ 
         if args.do_valid:
             prefix = 'the end of training for val data'
             val_loss = evaluate_and_print_results(prefix, (val_data_iterator, multi_val_iterator),

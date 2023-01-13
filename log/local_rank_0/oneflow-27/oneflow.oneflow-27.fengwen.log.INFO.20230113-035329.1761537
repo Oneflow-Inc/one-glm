@@ -1,0 +1,8 @@
+Log file created at: 2023/01/13 03:53:29
+Running on machine: oneflow-27
+Running duration (h:mm:ss): 0:00:00
+Log line format: [IWEF]yyyymmdd hh:mm:ss.uuuuuu threadid file:line] msg
+I20230113 03:53:29.089991 1761537 env_global_objects_scope.cpp:168] Using rpc backend: gRPC
+I20230113 03:53:29.091595 1761537 ctrl_server.cpp:40] CtrlServer listening on 0.0.0.0:35727
+I20230113 03:53:29.091742 1761537 rank_info_bootstrap_server.cpp:64] RankInfoBootstrapServer listening on 0.0.0.0:29500
+I20230113 03:53:49.149747 1761537 epoll_comm_network.cpp:63] CommNet:Epoll listening on 0.0.0.0:44997
