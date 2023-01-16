@@ -177,7 +177,7 @@ def rouge_metric(predictions, labels, examples, metric="rouge-1", duplicate_rate
             buf = remove_duplicate(buf, duplicate_rate)
         line = "\n".join(buf)
         pred_list.append(line)
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         import json
         with open("./results.json", "w") as output:
             for ref, pred in zip(ref_list, pred_list):
@@ -401,7 +401,7 @@ class BlankLMEvaluater(DecoderEvaluater):
         model.eval()
         store = torch.distributed.TCPStore(args.master_ip, 18931 + random.randint(0, 10000),
                                            mpu.get_data_parallel_world_size(),
-                                           torch.distributed.get_rank() == 0, datetime.timedelta(seconds=30))
+                                           0  == 0, datetime.timedelta(seconds=30))
         print_rank_0("Distributed store created")
 
         with torch.no_grad():

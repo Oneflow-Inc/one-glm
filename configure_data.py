@@ -101,7 +101,7 @@ class DataConfig:
         self.defaults = defaults
 
     def apply(self, args, tokenizer):
-        if torch.distributed.get_rank() == 0:
+        if 0  == 0:
             print('configuring data')
         self.apply_defaults(args)
         return make_loaders(args, tokenizer)
@@ -152,7 +152,7 @@ def prepare_tokenizer(args):
 
 
 def make_data_loader(dataset, tokenizer, batch_size, num_iters, args, shuffle=False, block_collate=False):
-    world_size = torch.distributed.get_world_size(group=mpu.get_data_parallel_group())
+    world_size = 1 # torch.distributed.get_world_size(group=mpu.get_data_parallel_group())
     rank = torch.distributed.get_rank(group=mpu.get_data_parallel_group())
     if args.loader_scatter is not None:
         rank = rank // args.loader_scatter
@@ -364,7 +364,7 @@ def build_multi_task_dataset(args, tokenizer):
                 SuperGlueDataset(args, task, data_dir, multi_seq_length, "dev", tokenizer, pattern_ensemble=True))
         train = MultiTaskDataset(args.multi_task_data, train_datasets)
         valid = MultiTaskDataset(args.multi_task_data, valid_datasets)
-        world_size = torch.distributed.get_world_size(group=mpu.get_data_parallel_group())
+        world_size = 1 # torch.distributed.get_world_size(group=mpu.get_data_parallel_group())
         multi_batch_size = args.batch_size * world_size
         if args.multi_batch_size is not None:
             multi_batch_size = args.multi_batch_size * world_size

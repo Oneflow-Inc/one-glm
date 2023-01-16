@@ -46,15 +46,15 @@ def initialize_model_parallel(model_parallel_size_):
     with a total of 16 GPUs, rank 0 to 7 belong to the first box and
     ranks 8 to 15 belong to the second box.
     """
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('> initializing model parallel with size {}'.format(
             model_parallel_size_))
     # Get world size and rank. Ensure some consistencies.
     assert torch.distributed.is_initialized()
-    world_size = torch.distributed.get_world_size()
+    world_size = 1 # torch.distributed.get_world_size()
     model_parallel_size = min(model_parallel_size_, world_size)
     ensure_divisibility(world_size, model_parallel_size)
-    rank = torch.distributed.get_rank()
+    rank = 0 
 
     # Build the data parallel groups.
     global _DATA_PARALLEL_GROUP
@@ -115,7 +115,7 @@ def get_model_parallel_src_rank():
     """Calculate the global rank corresponding to a local rank zeor
     in the model parallel group."""
     
-    global_rank = torch.distributed.get_rank()
+    global_rank = 0 
     local_world_size = get_model_parallel_world_size()
     return (global_rank // local_world_size) * local_world_size
 

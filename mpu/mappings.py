@@ -43,7 +43,7 @@ def _split(input_):
         return input_
 
     # Split along last dimension.
-    world_size = torch.distributed.get_world_size(group=group)
+    world_size = 1 # torch.distributed.get_world_size(group=group)
     input_list = split_tensor_along_last_dim(input_, world_size)
 
     # Note: torch.split does not create contiguous tensors by default.
@@ -64,7 +64,7 @@ def _gather(input_):
     # Size and dimension.
     last_dim = input_.dim() - 1
     rank = torch.distributed.get_rank(group=group)
-    world_size = torch.distributed.get_world_size(group=group)
+    world_size = 1 # torch.distributed.get_world_size(group=group)
 
     tensor_list = [torch.empty_like(input_) for _ in range(world_size)]
     tensor_list[rank] = input_
