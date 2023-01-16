@@ -16,7 +16,7 @@ gpt_options=" \
        --seq-length 512 \
        --max-position-embeddings 512 \
        --save /home/fengwen/datasets \
-       --train-iters 1000 \
+       --train-iters 10000 \
        --resume-dataloader \
        --train-data bert-large \
        --tokenizer-type BertWordPieceTokenizer \

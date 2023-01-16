@@ -211,13 +211,27 @@ def ensure_directory_exists(filename):
 def get_checkpoint_tracker_filename(checkpoints_path):
     return os.path.join(checkpoints_path, 'latest_checkpointed_iteration.txt')
 
+def torch_save(obj, path_file) -> None:
+    try:
+        import shutil
+        if os.path.exists(path_file):
+            if os.path.isdir(path_file):
+                shutil.rmtree(path_file)
+            else:
+                os.remove(path_file)
+        torch.save(obj, path_file)
+        return True
+    except Exception:
+        print(f"warning model save failed  in {path_file}❌")
+        return False
+
 
 def save_zero_checkpoint(args, iteration, optimizer):
     zero_sd = {'iteration': iteration,
                'optimizer_state_dict': optimizer.state_dict()}
     zero_checkpoint_name = get_checkpoint_name(args.save, iteration, zero=True)
     ensure_directory_exists(zero_checkpoint_name)
-    torch.save(zero_sd, zero_checkpoint_name)
+    torch_save(zero_sd, zero_checkpoint_name)
     print('  successfully saved {}'.format(zero_checkpoint_name))
 
 
@@ -262,7 +276,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler, args, tag=None, b
                 sd['rng_tracker_states'] = mpu.get_cuda_rng_tracker().get_states()
 
             ensure_directory_exists(checkpoint_name)
-            torch.save(sd, checkpoint_name)
+            torch_save(sd, checkpoint_name)
             print('  successfully saved {}'.format(checkpoint_name))
 
     # Wait so everyone is done (necessary)

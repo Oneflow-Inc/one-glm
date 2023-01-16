@@ -28,7 +28,7 @@ def _reduce(input_):
         return input_
 
     # All-reduce.
-    torch.distributed.all_reduce(input_, group=group)
+    # torch.distributed.all_reduce(input_, group=group)
 
     return input_
 

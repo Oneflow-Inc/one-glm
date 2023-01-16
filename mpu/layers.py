@@ -41,12 +41,11 @@ def _initialize_affine_weight(weight, output_size, input_size,
     Build the master weight on all processes and scatter
     the relevant chunk."""
     # If we only use 1 process for model parallelism, bypass scatter.
-    world_size = get_model_parallel_world_size()
-    if world_size == 1:
-        init_method(weight)
-        if return_master_weight:
-            return weight
-        return None
+  
+    init_method(weight)
+    if return_master_weight:
+        return weight
+    return None
 
     # Initialize master weight
     master_weight = torch.empty(output_size, input_size,
