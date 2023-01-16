@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-import torch
+import oneflow as torch
 
 
 def ensure_divisibility(numerator, denominator):

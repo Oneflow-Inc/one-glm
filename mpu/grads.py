@@ -18,9 +18,10 @@
 # repo: https://github.com/pytorch/pytorch
 
 
-import torch
-from torch._six import inf
-
+import oneflow as torch
+import math
+import math
+inf = math.inf
 from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
 
@@ -28,7 +29,7 @@ from .initialize import get_model_parallel_rank
 def clip_grad_norm(parameters, max_norm, norm_type=2):
     """Clips gradient norm of an iterable of parameters.
 
-    This is adapted from torch.nn.utils.clip_grad.clip_grad_norm_ and
+    This is adapted from oneflow.nn.utils.clip_grad.clip_grad_norm_ and
     added functionality to handle model parallel parameters. Note that
     the gradients are modified in place.
 
@@ -51,9 +52,7 @@ def clip_grad_norm(parameters, max_norm, norm_type=2):
         total_norm = max(p.grad.data.abs().max() for p in parameters)
         total_norm_cuda = torch.cuda.FloatTensor([float(total_norm)])
         # Take max across all GPUs.
-        torch.distributed.all_reduce(total_norm_cuda,
-                                     op=torch.distributed.ReduceOp.MAX,
-                                     group=get_model_parallel_group())
+      
         total_norm = total_norm_cuda[0].item()
     else:
         total_norm = 0
@@ -63,9 +62,7 @@ def clip_grad_norm(parameters, max_norm, norm_type=2):
                 total_norm += param_norm.item() ** norm_type
         # Sum across all model parallel GPUs.
         total_norm_cuda = torch.cuda.FloatTensor([float(total_norm)])
-        torch.distributed.all_reduce(total_norm_cuda,
-                                     op=torch.distributed.ReduceOp.SUM,
-                                     group=get_model_parallel_group())
+      
         total_norm = total_norm_cuda[0].item() ** (1. / norm_type)
     clip_coef = max_norm / (total_norm + 1e-6)
     if clip_coef < 1:

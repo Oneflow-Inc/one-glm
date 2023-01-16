@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Race."""
-import torch
+import oneflow as torch
 import mpu
 import json
 import functools

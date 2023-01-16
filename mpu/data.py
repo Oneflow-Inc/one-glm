@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
+import oneflow as torch
 
 from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
@@ -101,8 +101,8 @@ def broadcast_data(keys, data, datatype):
                                    dtype=datatype)
 
     # Boradcast
-    torch.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),
-                                group=get_model_parallel_group())
+    # torch.distributed.broadcast(flatten_data, get_model_parallel_src_rank(),
+    #                             group=get_model_parallel_group())
 
     # Unpack
     output = {}

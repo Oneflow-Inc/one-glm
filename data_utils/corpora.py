@@ -21,7 +21,7 @@ import tqdm
 from multiprocessing import Queue, Process
 from queue import Empty
 from collections import defaultdict
-from torch.utils import data
+from oneflow.utils import data
 from .lazy_loader import LazyLoader
 from utils import print_rank_0
 
@@ -486,7 +486,7 @@ class BertBaseData(BertData):
 
 class BertLargeData(BertData):
     PATH = '/dataset/c07bd62b/cognitive/zhengxiao/formatted_one_article_per_line_large'
-
+    PATH = '/home/fengwen/datasets/other/dataset/glm_train.txt'
 
 class WuDaoCorpus(PromptReader):
     PATH = "/dataset/fd5061f6/chinese_data/WuDao"

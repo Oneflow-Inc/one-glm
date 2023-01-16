@@ -17,7 +17,7 @@
 
 import argparse
 import os
-import torch
+import oneflow as torch
 import deepspeed
 import json
 from utils import get_hostname

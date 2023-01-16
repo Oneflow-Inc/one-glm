@@ -13,17 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
-import torch.distributed as dist
-from torch.nn.modules import Module
-from torch.autograd import Variable
-from torch.nn.parallel.distributed import DistributedDataParallel as DDP
+import oneflow as torch
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+import oneflow.distributed as dist
+from oneflow.nn.modules import Module
+# from oneflow.autograd import Variable
+from oneflow.nn.parallel.distributed import DistributedDataParallel as DDP
 
 import mpu
 
 
-class PyTorchDistributedDataParallel(DDP):
+class PyTorchDistributedDataParallel(Module):
+    def __init__(self) -> None:
+        super().__init__()
     def named_parameters(self, prefix: str = '', recurse: bool = True):
         return self.module.named_parameters(prefix=prefix, recurse=recurse)
 
@@ -80,9 +82,9 @@ class DistributedDataParallel(Module):
 
         self.hook_handles = []
         self.hooks = []
-        for param in list(self.module.parameters()):
-            def allreduce_hook(*unused):
-                Variable._execution_engine.queue_callback(allreduce_params)
+        # for param in list(self.module.parameters()):
+        #     def allreduce_hook(*unused):
+        #         Variable._execution_engine.queue_callback(allreduce_params)
         #    handle = param.register_hook(allreduce_hook)
         # self.hooks.append(allreduce_hook)
         # self.hook_handles.append(handle)

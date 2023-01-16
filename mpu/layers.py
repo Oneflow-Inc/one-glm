@@ -18,10 +18,10 @@
 # repo: https://github.com/pytorch/pytorch
 
 
-import torch
-import torch.nn.functional as F
-import torch.nn.init as init
-from torch.nn.parameter import Parameter
+import oneflow as torch
+import oneflow.nn.functional as F
+import oneflow.nn.init as init
+from oneflow.nn.parameter import Parameter
 
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_world_size
@@ -41,12 +41,11 @@ def _initialize_affine_weight(weight, output_size, input_size,
     Build the master weight on all processes and scatter
     the relevant chunk."""
     # If we only use 1 process for model parallelism, bypass scatter.
-    world_size = get_model_parallel_world_size()
-    if world_size == 1:
-        init_method(weight)
-        if return_master_weight:
-            return weight
-        return None
+  
+    init_method(weight)
+    if return_master_weight:
+        return weight
+    return None
 
     # Initialize master weight
     master_weight = torch.empty(output_size, input_size,
@@ -71,7 +70,7 @@ def _initialize_affine_weight(weight, output_size, input_size,
 class VocabParallelEmbedding(torch.nn.Module):
     """Embedding parallelized in the vocabulary dimension.
 
-    This is mainly adapted from torch.nn.Embedding and all the default
+    This is mainly adapted from oneflow.nn.Embedding and all the default
     values are kept.
     Arguments:
         num_embeddings: vocabulary size.
@@ -102,7 +101,7 @@ class VocabParallelEmbedding(torch.nn.Module):
         # Allocate weights.
         self.weight = Parameter(torch.Tensor(self.num_embeddings_per_partition,
                                              self.embedding_dim))
-        self.weight.model_parallel = True
+        # self.weight.model_parallel = True
         # And initialize.
         _initialize_affine_weight(
             self.weight, self.num_embeddings, self.embedding_dim,
@@ -130,7 +129,7 @@ class VocabParallelEmbedding(torch.nn.Module):
 class ParallelEmbedding(torch.nn.Module):
     """Embedding parallelized in the embedding dimension.
 
-    This is mainly adapted from torch.nn.Embedding and all the default
+    This is mainly adapted from oneflow.nn.Embedding and all the default
     values are kept.
     Arguments:
         num_embeddings: vocabulary size.
@@ -159,7 +158,7 @@ class ParallelEmbedding(torch.nn.Module):
         # Allocate weights.
         self.weight = Parameter(torch.Tensor(self.num_embeddings,
                                              self.embedding_dim_per_partition))
-        self.weight.model_parallel = True
+        # self.weight.model_parallel = True
         # And initialize.
         _initialize_affine_weight(
             self.weight, self.num_embeddings, self.embedding_dim,
@@ -214,10 +213,10 @@ class ColumnParallelLinear(torch.nn.Module):
         # we allocate the transpose.
         self.weight = Parameter(torch.Tensor(self.output_size_per_partition,
                                              self.input_size))
-        self.weight.model_parallel = True
+        # self.weight.model_parallel = True
         if bias:
             self.bias = Parameter(torch.Tensor(self.output_size_per_partition))
-            self.bias.model_parallel = True
+            # self.bias.model_parallel = True
             # Always initialize bias to zero.
             with torch.no_grad():
                 self.bias.zero_()
@@ -288,7 +287,7 @@ class RowParallelLinear(torch.nn.Module):
         # we allocate the transpose.
         self.weight = Parameter(torch.Tensor(self.output_size,
                                              self.input_size_per_partition))
-        self.weight.model_parallel = True
+        # self.weight.model_parallel = True
         if bias:
             self.bias = Parameter(torch.Tensor(self.output_size))
             # Always initialize bias to zero.

@@ -17,9 +17,9 @@
 
 import math
 
-import torch
-import torch.nn.init as init
-from apex.normalization.fused_layer_norm import FusedLayerNorm as LayerNorm
+import oneflow as torch
+import oneflow.nn.init as init
+from oneflow.nn import LayerNorm
 
 from .initialize import get_model_parallel_world_size
 from .layers import ColumnParallelLinear
@@ -302,7 +302,7 @@ class ParallelSelfAttention(torch.nn.Module):
             max_attention_scores = attention_scores.max(dim=-1, keepdim=True)[0]
             attention_scores -= max_attention_scores
             attention_scores *= self.attention_scale
-        # if torch.distributed.get_rank() == 0:
+        # if 0  == 0:
         #     print(min_attention_scores, attention_scores.max().item())
         attention_scores = attention_scores + (-65504.0) * (1.0 - ltor_mask)
         # Attention probabilities. [b, np, s, s]

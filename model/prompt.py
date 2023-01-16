@@ -1,5 +1,5 @@
 import random
-import torch
+import oneflow as torch
 
 
 class PromptSpell(torch.nn.Module):

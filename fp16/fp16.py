@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Stable version of apex FP16 Optimizer"""
-import torch
+import oneflow as torch
 from torch import nn
-from torch.autograd import Variable
-from torch.nn.parameter import Parameter
-from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from oneflow.autograd import Variable
+from oneflow.nn.parameter import Parameter
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 from .loss_scaler import DynamicLossScaler, LossScaler
 from .fp16util import model_grads_to_master_grads, master_params_to_model_params, clip_grad_norm

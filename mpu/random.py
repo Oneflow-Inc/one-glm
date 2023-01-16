@@ -21,14 +21,14 @@
 # Parts of the code here are adapted from PyTorch
 # repo: https://github.com/pytorch/pytorch
 import contextlib
-import torch.distributed as dist
-import torch
-from torch import _C
-from torch.cuda import _lazy_call, device as device_ctx_manager
-#from torch.utils.checkpoint import detach_variable
+import oneflow.distributed as dist
+import oneflow as torch
+from oneflow import _C
+# from oneflow.cuda import _lazy_call, device as device_ctx_manager
+#from oneflow.utils.checkpoint import detach_variable
 
 
-import torch.distributed as dist
+import oneflow.distributed as dist
 PARTITION_ACTIVATIONS = False
 PA_CORRECTNESS_TEST= False
 
@@ -112,7 +112,7 @@ def _set_cuda_rng_state(new_state, device=-1):
             default_generator = torch.cuda.default_generators[idx]
             default_generator.set_state(new_state)
 
-    _lazy_call(cb)
+    # _lazy_call(cb)
 
 
 
@@ -158,10 +158,10 @@ class CudaRNGStatesTracker:
         if name in self.states_:
             raise Exception('cuda rng state {} already exists'.format(name))
         # Get the current rng state.
-        orig_rng_state = torch.cuda.get_rng_state()
+        orig_rng_state = torch.get_rng_state()
         # Set the new state and store it.
         torch.cuda.manual_seed(seed)
-        self.states_[name] = torch.cuda.get_rng_state()
+        self.states_[name] = torch.get_rng_state()
         # Reset rng state to what it was.
         _set_cuda_rng_state(orig_rng_state)
 
@@ -173,7 +173,7 @@ class CudaRNGStatesTracker:
         if name not in self.states_:
             raise Exception('cuda rng state {} is not added'.format(name))
         # Store current rng state.
-        orig_cuda_rng_state = torch.cuda.get_rng_state()
+        orig_cuda_rng_state = torch.get_rng_state()
         # Set rng state to the desired one
         _set_cuda_rng_state(self.states_[name])
         # Do the stuff we wanted to do.
@@ -181,7 +181,7 @@ class CudaRNGStatesTracker:
             yield
         finally:
             # Update the current rng state for later use.
-            self.states_[name] = torch.cuda.get_rng_state()
+            self.states_[name] = torch.get_rng_state()
             # And set the state to the original state we started with.
             _set_cuda_rng_state(orig_cuda_rng_state)
 
@@ -218,11 +218,11 @@ def model_parallel_cuda_manual_seed(seed):
     # Data parallel gets the original sedd.
     data_parallel_seed = seed
 
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('> initializing model parallel cuda seeds on global rank {}, '
               'model parallel rank {}, and data parallel rank {} with '
               'model parallel seed: {} and data parallel seed: {}'.format(
-                  torch.distributed.get_rank(), get_model_parallel_rank(),
+                  0 , get_model_parallel_rank(),
                   get_data_parallel_rank(), model_parallel_seed,
                   data_parallel_seed), flush=True)
     _CUDA_RNG_STATE_TRACKER.reset()
@@ -271,7 +271,7 @@ def get_full_inputs(tensors):
         
 
 class CheckpointFunction(torch.autograd.Function):
-    """This function is adapted from torch.utils.checkpoint with
+    """This function is adapted from oneflow.utils.checkpoint with
        two main changes:
            1) torch.cuda.set_rng_state is replaced with `_set_cuda_rng_state`
            2) the states in the model parallel tracker are also properly
@@ -306,7 +306,7 @@ class CheckpointFunction(torch.autograd.Function):
         
         # Copy the rng states.
         ctx.fwd_cpu_rng_state = torch.get_rng_state()
-        ctx.fwd_cuda_rng_state = torch.cuda.get_rng_state()
+        ctx.fwd_cuda_rng_state = torch.get_rng_state()
         ctx.fwd_cuda_rng_state_tracker = get_cuda_rng_tracker().get_states()
 
         #ctx.save_for_backward(*args)
@@ -346,7 +346,7 @@ class CheckpointFunction(torch.autograd.Function):
 
         # Store the current states.
         bwd_cpu_rng_state = torch.get_rng_state()
-        bwd_cuda_rng_state = torch.cuda.get_rng_state()
+        bwd_cuda_rng_state = torch.get_rng_state()
         bwd_cuda_rng_state_tracker = get_cuda_rng_tracker().get_states()
 
         # Set the states to what it used to be before the forward pass.
@@ -374,8 +374,8 @@ class CheckpointFunction(torch.autograd.Function):
 
 def checkpoint(function, *args):
     """Checkpoint a model or part of the model.
-    This has been directly copied from torch.utils.checkpoint."""
-    return CheckpointFunction.apply(function, *args)
+    This has been directly copied from oneflow.utils.checkpoint."""
+    # return CheckpointFunction.apply(function, *args)
 
 def partition_activations_in_checkpoint(partition_activation):
     global PARTITION_ACTIVATIONS

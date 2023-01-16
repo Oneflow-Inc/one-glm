@@ -9,14 +9,14 @@ gpt_options=" \
        --bert-prob 1.0 \
        --avg-block-length 3 \
        --experiment-name blocklm-large-blank \
-       --model-parallel-size ${MP_SIZE} \
+       --model-parallel-size 1 \
        --num-layers 24 \
        --hidden-size 1024 \
        --num-attention-heads 16 \
        --seq-length 512 \
        --max-position-embeddings 512 \
-       --save /root/data/checkpoints \
-       --train-iters 200000 \
+       --save /home/fengwen/datasets \
+       --train-iters 100 \
        --resume-dataloader \
        --train-data bert-large \
        --tokenizer-type BertWordPieceTokenizer \
@@ -27,11 +27,5 @@ gpt_options=" \
        --lr-decay-iters 160000 \
        --lr-decay-ratio 0.05 \
        --warmup .05 \
-       --checkpoint-activations \
-       --deepspeed-activation-checkpointing \
-       --fp16 \
-"
-gpt_options="${gpt_options}
-               --deepspeed \
-               --deepspeed_config ${config_json} \
+       --batch-size 1 \
 "

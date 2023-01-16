@@ -24,7 +24,7 @@ import re
 from abc import ABC, abstractmethod
 from collections import Counter
 from typing import List, Dict, Callable
-from torch.utils.data import Dataset
+from oneflow.utils.data import Dataset
 from tqdm import tqdm
 import pandas as pd
 import numpy as np

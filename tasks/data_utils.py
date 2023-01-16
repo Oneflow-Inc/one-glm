@@ -22,9 +22,9 @@ import re
 from typing import Dict, List, Optional
 
 import numpy as np
-import torch
-import torch.utils.data
-from torch.utils.data.dataloader import default_collate
+import oneflow as torch
+import oneflow.utils.data
+from oneflow.utils.data.dataloader import default_collate
 
 import mpu
 

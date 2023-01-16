@@ -1,10 +1,24 @@
 import sys
 import os
-import torch
+import oneflow as torch
 import copy
 
 checkpoint = sys.argv[1]
 target_mp = int(sys.argv[2])
+
+def torch_save(obj, path_file) -> None:
+    try:
+        import shutil
+        if os.path.exists(path_file):
+            if os.path.isdir(path_file):
+                shutil.rmtree(path_file)
+            else:
+                os.remove(path_file)
+        torch.save(obj, path_file)
+        return True
+    except Exception:
+        print(f"warning model save failed  in {path_file}❌")
+        return False
 
 assert os.path.isdir(checkpoint)
 iteration_file = os.path.join(checkpoint, 'latest_checkpointed_iteration.txt')
@@ -104,7 +118,7 @@ if target_mp < len(filenames):
                 elif len(v.shape) == 1 and ('dense_h_to_4h' in k or "attention.relative" in k):
                     d['module'][k] = torch.cat([d['module'][k], v], 0)
         filename = os.path.join(new_checkpoint, "mp_rank_{:02d}_model_states.pt".format(i))
-        torch.save(d, filename)
+        torch_save(d, filename)
 
 if target_mp > len(filenames):
     print("Increase MP size.")
@@ -156,4 +170,4 @@ if target_mp > len(filenames):
                     else:
                         d_new['module'][k] = v.clone()
             filename = os.path.join(new_checkpoint, "mp_rank_{:02d}_model_states.pt".format(j))
-            torch.save(d_new, filename)
+            torch_save(d_new, filename)

@@ -17,7 +17,7 @@ import argparse
 import os
 import random
 import numpy
-import torch
+import oneflow as torch
 
 import mpu
 
@@ -65,11 +65,7 @@ def initialize_distributed(backend='nccl'):
     master_ip = os.getenv('MASTER_ADDR', 'localhost')
     master_port = os.getenv('MASTER_PORT', '6000')
     init_method += master_ip + ':' + master_port
-    torch.distributed.init_process_group(
-        backend=backend,
-        world_size=world_size,
-        rank=rank,
-        init_method=init_method)
+   
 
 
 def print_separator(message):
@@ -77,6 +73,6 @@ def print_separator(message):
     filler_len = (78 - len(message)) // 2
     filler = '-' * filler_len
     string = '\n' + filler + ' {} '.format(message) + filler
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print(string, flush=True)
     torch.distributed.barrier()

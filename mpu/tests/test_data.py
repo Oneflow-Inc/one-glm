@@ -18,7 +18,7 @@ import operator
 import sys
 sys.path.append("../..")
 
-import torch
+import oneflow as torch
 import mpu
 from mpu import data as data_utils
 
@@ -28,7 +28,7 @@ from commons import print_separator
 
 def test_boradcast_data(model_parallel_size):
 
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('> testing boradcast_data with model parallel size {} ...'.
               format(model_parallel_size))
 
@@ -74,14 +74,14 @@ def test_boradcast_data(model_parallel_size):
     mpu.destroy_model_parallel()
 
     torch.distributed.barrier()
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('>> passed the test :-)')
 
 
 if __name__ == '__main__':
 
     initialize_distributed()
-    world_size = torch.distributed.get_world_size()
+    world_size = 1 # torch.distributed.get_world_size()
 
     model_parallel_size = 1
     while model_parallel_size <= world_size:

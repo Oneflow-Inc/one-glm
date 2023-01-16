@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
-from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+import oneflow as torch
+import oneflow.nn as nn
+from oneflow.autograd import Variable
+from oneflow._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 import mpu
 

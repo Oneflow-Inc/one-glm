@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
+import oneflow as torch
 import mpu
 
 # item() is a recent addition, so this helps with backward compatibility.
@@ -116,9 +116,7 @@ class DynamicLossScaler:
         # Since each model parallel GPU carries only part of the model,
         # make sure overflow flag is synced across all the model parallel GPUs
         overflow_gpu = torch.cuda.ByteTensor([overflow])
-        torch.distributed.all_reduce(overflow_gpu,
-                                     op=torch.distributed.ReduceOp.MAX,
-                                     group=mpu.get_model_parallel_group())
+      
         overflow = overflow_gpu[0].item()
         return bool(overflow)
 
@@ -188,8 +186,8 @@ class DynamicLossScaler:
 """
 TO-DO separate out into an example.
 if __name__ == "__main__":
-    import torch
-    from torch.autograd import Variable
+    import oneflow as torch
+    from oneflow.autograd import Variable
     from dynamic_loss_scaler import DynamicLossScaler
 
     # N is batch size; D_in is input dimension;

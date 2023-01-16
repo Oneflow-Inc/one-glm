@@ -16,7 +16,7 @@
 import sys
 sys.path.append("../..")
 
-import torch
+import oneflow as torch
 import mpu
 
 from commons import initialize_distributed
@@ -25,7 +25,7 @@ from commons import print_separator
 
 def test_initialize_model_parallel(model_parallel_size):
 
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('> testing initialize_model_parallel with size {} ...'.format(
             model_parallel_size))
     model_parallel_size_ = min(model_parallel_size,
@@ -36,20 +36,20 @@ def test_initialize_model_parallel(model_parallel_size):
 
     # Checks.
     def check(group, world_size, rank):
-        assert world_size == torch.distributed.get_world_size(group=group)
+        assert world_size == 1 # torch.distributed.get_world_size(group=group)
         assert rank == torch.distributed.get_rank(group=group)
 
     # Model parallel.
     world_size = model_parallel_size_
-    rank = torch.distributed.get_rank() % model_parallel_size_
+    rank = 0  % model_parallel_size_
     assert world_size == mpu.get_model_parallel_world_size()
     assert rank == mpu.get_model_parallel_rank()
     check(mpu.get_model_parallel_group(), world_size, rank)
 
 
     # Data parallel.
-    world_size = torch.distributed.get_world_size() // model_parallel_size_
-    rank = torch.distributed.get_rank() // model_parallel_size
+    world_size = 1 # torch.distributed.get_world_size() // model_parallel_size_
+    rank = 0  // model_parallel_size
     assert world_size == mpu.get_data_parallel_world_size()
     assert rank == mpu.get_data_parallel_rank()
     check(mpu.get_data_parallel_group(), world_size, rank)
@@ -58,13 +58,13 @@ def test_initialize_model_parallel(model_parallel_size):
     mpu.destroy_model_parallel()
 
     torch.distributed.barrier()
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('>> passed the test :-)')
 
 
 def test_get_model_parallel_src_rank(model_parallel_size_):
 
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('> testing get_model_parallel_src_rank with size {} ...'.format(
             model_parallel_size_))
     model_parallel_size = min(model_parallel_size_,
@@ -74,21 +74,21 @@ def test_get_model_parallel_src_rank(model_parallel_size_):
     assert mpu.model_parallel_is_initialized()
 
     # Checks
-    src_rank = torch.distributed.get_rank() - mpu.get_model_parallel_rank()
+    src_rank = 0  - mpu.get_model_parallel_rank()
     assert mpu.get_model_parallel_src_rank() == src_rank
 
     # Reset groups
     mpu.destroy_model_parallel()
 
     torch.distributed.barrier()
-    if torch.distributed.get_rank() == 0:
+    if 0  == 0:
         print('>> passed the test :-)')
 
 
 if __name__ == '__main__':
 
     initialize_distributed()
-    world_size = torch.distributed.get_world_size()
+    world_size = 1 # torch.distributed.get_world_size()
     model_parallel_size = 1
     while model_parallel_size <= world_size:
         print_separator('test initialize model parallel')

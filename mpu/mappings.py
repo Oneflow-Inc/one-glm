@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
+import oneflow as torch
 
 from .initialize import get_model_parallel_group
 from .utils import split_tensor_along_last_dim
@@ -28,7 +28,7 @@ def _reduce(input_):
         return input_
 
     # All-reduce.
-    torch.distributed.all_reduce(input_, group=group)
+    # torch.distributed.all_reduce(input_, group=group)
 
     return input_
 
@@ -43,7 +43,7 @@ def _split(input_):
         return input_
 
     # Split along last dimension.
-    world_size = torch.distributed.get_world_size(group=group)
+    world_size = 1 # torch.distributed.get_world_size(group=group)
     input_list = split_tensor_along_last_dim(input_, world_size)
 
     # Note: torch.split does not create contiguous tensors by default.
@@ -64,7 +64,7 @@ def _gather(input_):
     # Size and dimension.
     last_dim = input_.dim() - 1
     rank = torch.distributed.get_rank(group=group)
-    world_size = torch.distributed.get_world_size(group=group)
+    world_size = 1 # torch.distributed.get_world_size(group=group)
 
     tensor_list = [torch.empty_like(input_) for _ in range(world_size)]
     tensor_list[rank] = input_
