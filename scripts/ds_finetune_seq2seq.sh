@@ -21,7 +21,7 @@ echo "MODEL_ARGS"$MODEL_ARGS
  
 EXPERIMENT_NAME=${EXPERIMENT_NAME}_${DATESTR}
 mkdir logs
-run_cmd="python  finetune_glm.py \
+run_cmd="python  -m oneflow.distributed.launch --nproc_per_node  1  finetune_glm.py \
        --finetune \
        --checkpoint-activations \
        --experiment-name ${EXPERIMENT_NAME} \

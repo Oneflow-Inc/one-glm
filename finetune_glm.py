@@ -447,8 +447,8 @@ if __name__ == '__main__':
     args = get_args()
     assert args.finetune
 
-    # Pytorch distributed.
-    initialize_distributed(args)
+    # # Pytorch distributed.
+    # initialize_distributed(args)
 
     # Random seeds for reproducability.
     set_random_seed(args.seed)
