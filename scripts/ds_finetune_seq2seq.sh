@@ -1,7 +1,9 @@
-DATA_ROOT=/root/data
+DATA_ROOT="/data/home/fengwen/cnn_dailmail/cnn-dailymail"
 CHECKPOINT_PATH="/dataset/c07bd62b/finetune_checkpoints"
-SAVE_PATH=/root/data/finetune_checkpoints
+SAVE_PATH="/home/fengwen/one-glm/runs"
 DATESTR=$(date +"%m-%d-%H-%M")
+
+export CUDA_VISIBLE_DEVICES=7
 
 source $1    # Model
 source $2    # Task
@@ -9,33 +11,36 @@ source $2    # Task
 NUM_WORKERS=2
 NUM_GPUS_PER_WORKER=8
 HOST_FILE_PATH="./hostfile"
-MP_SIZE=1
+MP_SIZE=10
 MASTER_PORT=$(shuf -n 1 -i 10000-65535)
+# 注意：不接受--deep_speed参数 因为oneflow的launch模块支持单个或者多个节点的启动，不需要使用deepspeed来辅助
 
-OPTIONS_NCCL="NCCL_DEBUG=info NCCL_IB_DISABLE=0 NCCL_NET_GDR_LEVEL=2"
-DISTRIBUTED_ARGS="${OPTIONS_NCCL} deepspeed --hostfile ${HOST_FILE_PATH} --master_port ${MASTER_PORT} --num_nodes ${NUM_WORKERS} --num_gpus ${NUM_GPUS_PER_WORKER}"
-
+# OPTIONS_NCCL="NCCL_DEBUG=info NCCL_IB_DISABLE=0 NCCL_NET_GDR_LEVEL=2"
+# DISTRIBUTED_ARGS="${OPTIONS_NCCL} deepspeed --hostfile ${HOST_FILE_PATH} --master_port ${MASTER_PORT} --num_nodes ${NUM_WORKERS} --num_gpus ${NUM_GPUS_PER_WORKER}"
+echo "MODEL_ARGS"$MODEL_ARGS 
+ 
 EXPERIMENT_NAME=${EXPERIMENT_NAME}_${DATESTR}
 mkdir logs
-run_cmd="${DISTRIBUTED_ARGS} finetune_glm.py \
-       --deepspeed \
-       --deepspeed_config config_tasks/config_blocklm_10B_cnndm.json \
+run_cmd="python  finetune_glm.py \
        --finetune \
+       --checkpoint-activations \
        --experiment-name ${EXPERIMENT_NAME} \
        --task ${TASK_NAME} \
        --data-dir ${DATA_PATH} \
        --save ${SAVE_PATH} \
-       --checkpoint-activations \
        --num-workers 1 \
        --no-load-lr-scheduler \
        $MODEL_ARGS \
        $TRAIN_ARGS \
        $COMMON_ARGS \
        $TASK_ARGS \
-       --fp16 \
        --model-parallel-size ${MP_SIZE} \
        --overwrite \
+       --epochs 1000  \
        2>&1 | tee logs/log-${EXPERIMENT_NAME}.txt"
 
 echo ${run_cmd}
 eval ${run_cmd}
+set +x
+
+

@@ -7,4 +7,4 @@ MODEL_ARGS="--block-lm \
             --num-attention-heads 32 \
             --max-position-embeddings 1024 \
             --tokenizer-type GPT2BPETokenizer \
-            --load-pretrained ${CHECKPOINT_PATH}/blocklm-2b-512"
+             "

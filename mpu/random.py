@@ -286,7 +286,7 @@ class CheckpointFunction(flow.autograd.Function):
         if mp_rank is None:
             mp_rank = get_model_parallel_rank()
             mp_size = get_model_parallel_world_size()
-            mp_group = get_model_parallel_group()
+            # mp_group = get_model_parallel_group()
 
 
         global cuda_device, transport_stream, PARTITION_ACTIVATIONS

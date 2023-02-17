@@ -1,6 +1,6 @@
 EXPERIMENT_NAME=${MODEL_TYPE}-cnndm_org
 TASK_NAME=cnn_dm_original
-DATA_PATH="${DATA_ROOT}/cnn_dm_original"
+DATA_PATH="${DATA_ROOT}/cnn_dm"
 
 TRAIN_ARGS="--epochs 10 \
             --lr 1e-5 \

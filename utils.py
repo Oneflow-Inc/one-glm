@@ -124,11 +124,11 @@ class Timers:
 
         def start(self):
             """Start the timer."""
-            # assert not self.started_, 'timer has already been started'
-            # flow.cuda.synchronize()
-            # self.start_time = time.time()
-            # self.started_ = True
-            pass
+            assert not self.started_, 'timer has already been started'
+            flow.cuda.synchronize()
+            self.start_time = time.time()
+            self.started_ = True
+            
 
         def stop(self):
             """Stop the timer."""

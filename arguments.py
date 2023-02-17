@@ -35,7 +35,7 @@ def add_model_config_args(parser):
     """Model arguments"""
     
     group = parser.add_argument_group('model', 'model configuration')
-    group.add_argument('--mode', type=str, default='None',
+    group.add_argument('--mode', type=str, default='eager',
                        choices=['eager', 'graph'],
                        help='training mode')
     group.add_argument('--transformer-xl', action='store_true', help='use transformer-xl for training')

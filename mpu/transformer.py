@@ -26,7 +26,8 @@ from .initialize import get_model_parallel_world_size
 from .layers import ColumnParallelLinear
 from .layers import RowParallelLinear
 from .mappings import gather_from_model_parallel_region
-from .random import checkpoint
+# from .random import checkpoint
+import oneflow.utils.checkpoint as checkpoint
 from .random import get_cuda_rng_tracker
 from .utils import divide
 from .utils import split_tensor_along_last_dim
@@ -120,10 +121,10 @@ class ParallelCrossAttention(flow.nn.Module):
                                        init_method=output_layer_init_method)
         self.output_dropout = flow.nn.Dropout(output_dropout_prob)
 
-        if deepspeed.checkpointing.is_configured():
-            global get_cuda_rng_tracker, checkpoint
-            get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
-            checkpoint = deepspeed.checkpointing.checkpoint
+        # if deepspeed.checkpointing.is_configured():
+        #     global get_cuda_rng_tracker, checkpoint
+        #     get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
+        #     checkpoint = deepspeed.checkpointing.checkpoint
 
     def _transpose_for_scores(self, tensor):
         """Transpose a 3D tensor [b, s, np*hn] into a 4D tensor with
@@ -847,8 +848,8 @@ class GPT2ParallelTransformer(flow.nn.Module):
         if self.performer:
             assert is_scalar, 'attention_mask should be a scalar to indicate the seperation position.'
             assert memory_length == 0, 'Do not support transformer-xl.'
-        # print(f'{is_scalar=}')
-        # print(f'{is_sep=}')
+
+
         # False
         if is_sep:
             sep = attention_mask.item() if is_scalar else attention_mask
@@ -915,7 +916,6 @@ class GPT2ParallelTransformer(flow.nn.Module):
                 hidden_states = hidden_states + block_position_embeddings
         hidden_states = self.embedding_dropout(hidden_states)
 
-        # print(hidden_states)
 
         def check_detach(_hidden_states):
             if detach_memory:
@@ -944,10 +944,6 @@ class GPT2ParallelTransformer(flow.nn.Module):
 
             return custom_forward
 
-        # print('=05'*50) # is down
-        # print(hidden_states)
-        # print(f'{self.checkpoint_activations=}')
-
         if self.checkpoint_activations:
             l = 0
             num_layers = len(self.layers)
@@ -960,11 +956,10 @@ class GPT2ParallelTransformer(flow.nn.Module):
                     args += [position_embeddings, self.r_w_bias, self.r_r_bias]
                 if memory_states:
                     args += memory_states[l: l + chunk_length]
-                hidden_states = checkpoint(custom(l, l + chunk_length), *args)
+                
+                hidden_states = checkpoint.checkpoint(custom(l, l + chunk_length), *args)
                 l += chunk_length
         else:
-            # print(self.layers)
-            # print(f'{hidden_states=}')
             for i, layer in enumerate(self.layers):
                 args = [hidden_states, attention_mask] if not self.use_decoder_layer else [hidden_states,
                                                                                            encoder_states,
@@ -976,17 +971,11 @@ class GPT2ParallelTransformer(flow.nn.Module):
                 if self.max_memory_length > 0 or return_memory:
                     mem_layers.append(check_detach(hidden_states))
 
-                # print(hidden_states)
-                # i = 0 break up
-                # exit(0)
+             
 
         # Final layer norm.
-        # print(hidden_states)
         output = self.final_layernorm(hidden_states)
 
-        # print("=03"*50) # is up
-        # print(output)
-        # exit(0)
         if self.max_memory_length > 0 or return_memory:
             mem_layers = self.update_mems(
                 mem_layers, memory_states, return_memory=return_memory)
@@ -1062,10 +1051,10 @@ class BertParallelSelfAttention(flow.nn.Module):
         # on average it should not be partition dependent.
         self.dropout = flow.nn.Dropout(dropout_prob)
 
-        if deepspeed.checkpointing.is_configured():
-            global get_cuda_rng_tracker, checkpoint
-            get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
-            checkpoint = deepspeed.checkpointing.checkpoint
+        # if deepspeed.checkpointing.is_configured():
+        #     global get_cuda_rng_tracker, checkpoint
+        #     get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
+        #     checkpoint = deepspeed.checkpointing.checkpoint
 
     def _transpose_for_scores(self, tensor):
         """Transpose a 3D tensor [b, s, np*hn] into a 4D tensor with
