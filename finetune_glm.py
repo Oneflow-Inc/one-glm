@@ -255,7 +255,6 @@ def _train(model, optimizer, lr_scheduler, forward_step,
         # Checkpointing at the end of each epoch.
         if args.save and (epoch + 1) % args.save_epoch == 0:
             save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args, only_changed_parameters=True)
-
         # Callback at the end of each epoch.
         if end_of_epoch_callback is not None and (epoch + 1) % args.eval_epoch == 0:
             score_dict = end_of_epoch_callback(model, epoch, summary_writer=summary_writer)
@@ -330,6 +329,7 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
     # Build calback function.
     timers('callback function').start()
     end_of_epoch_callback, end_of_train_callback = None, None
+    end_of_epoch_callback_provider = None # TODO(fengwen) test待修复
     if end_of_epoch_callback_provider is not None:
         if train_valid_datasets_provider is not None and args.epochs > 0 and not args.no_validation:
             end_of_epoch_callback = end_of_epoch_callback_provider(args, tokenizer, is_test=False)

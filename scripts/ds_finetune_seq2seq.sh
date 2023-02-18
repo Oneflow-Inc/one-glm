@@ -8,9 +8,9 @@ source $1    # Model
 source $2    # Task
 
 NUM_WORKERS=2
-NUM_GPUS_PER_WORKER=4 # 代表使用
+NUM_GPUS_PER_WORKER=8 # 代表使用
 HOST_FILE_PATH="./hostfile"
-MP_SIZE=1
+MP_SIZE=20
 MASTER_PORT=$(shuf -n 1 -i 10000-65535)
 # 注意：不接受--deep_speed参数 因为oneflow的launch模块支持单个或者多个节点的启动，不需要使用deepspeed来辅助
 
