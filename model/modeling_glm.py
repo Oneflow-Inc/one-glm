@@ -110,9 +110,7 @@ class GLMModel(flow.nn.Module):
         batch_size = input_ids.size(0)
       
         words_embeddings = self.word_embeddings(input_ids)
-        # print(f'{words_embeddings=}')
         embeddings = words_embeddings
-        # print(f'{(prompt_pos is not None)=}')
         # False
         if prompt_pos is not None:
             embeddings = embeddings.clone()

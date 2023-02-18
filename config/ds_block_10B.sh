@@ -40,7 +40,7 @@ gpt_options=" \
        --deepspeed-activation-checkpointing \
        --fp16 \
 "
-gpt_options="${gpt_options}
-               --deepspeed \
-               --deepspeed_config ${config_json} \
-"
+# gpt_options="${gpt_options}
+#                --deepspeed \
+#                --deepspeed_config ${config_json} \
+# "

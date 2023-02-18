@@ -195,7 +195,6 @@ def _train(model, optimizer, lr_scheduler, forward_step,
     """Train the model."""
 
     # Turn on training mode which enables dropout.
-    model.train()
 
     # Tracking loss.
     args.iteration = 0
@@ -239,8 +238,8 @@ def _train(model, optimizer, lr_scheduler, forward_step,
                 learning_rate = optimizer.param_groups[0]['lr']
                 avg_lm_loss = total_lm_loss.item() / args.log_interval
                 elapsed_time = timers('interval time').elapsed()
-                timers.log(['forward', 'backward', 'allreduce', 'optimizer', 'batch generator'],
-                           normalizer=args.log_interval)
+                # timers.log(['forward', 'backward', 'allreduce', 'optimizer', 'batch generator'],
+                #            normalizer=args.log_interval)
                 report_iteration_metrics(summary_writer, optimizer, learning_rate, avg_lm_loss,
                                          elapsed_time * 1000.0 / args.log_interval, args.iteration, args.train_iters,
                                          args)
@@ -256,7 +255,6 @@ def _train(model, optimizer, lr_scheduler, forward_step,
         # Checkpointing at the end of each epoch.
         if args.save and (epoch + 1) % args.save_epoch == 0:
             save_checkpoint(args.iteration, model, optimizer, lr_scheduler, args, only_changed_parameters=True)
-
         # Callback at the end of each epoch.
         if end_of_epoch_callback is not None and (epoch + 1) % args.eval_epoch == 0:
             score_dict = end_of_epoch_callback(model, epoch, summary_writer=summary_writer)
@@ -301,8 +299,6 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
             train_iters = flow.cuda.LongTensor([len(train_dataloader)])
         else:
             train_iters = flow.cuda.LongTensor([0])
-        flow.distributed.broadcast(train_iters, mpu.get_model_parallel_src_rank(),
-                                    group=mpu.get_model_parallel_group())
         if mpu.get_model_parallel_rank() != 0:
             args.train_iters_per_epoch = train_iters[0].item()
             args.train_iters = args.epochs * args.train_iters_per_epoch
@@ -328,11 +324,12 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
                 train_block_dataloader = FakeDataloader(args.train_iters)
                 valid_block_dataloader = FakeDataloader(None)
             train_block_dataloader, valid_block_dataloader = iter(train_block_dataloader), iter(valid_block_dataloader)
-
+    
     timers('train/valid/test dataset/dataloder').stop()
     # Build calback function.
     timers('callback function').start()
     end_of_epoch_callback, end_of_train_callback = None, None
+    end_of_epoch_callback_provider = None # TODO(fengwen) test待修复
     if end_of_epoch_callback_provider is not None:
         if train_valid_datasets_provider is not None and args.epochs > 0 and not args.no_validation:
             end_of_epoch_callback = end_of_epoch_callback_provider(args, tokenizer, is_test=False)
@@ -364,16 +361,16 @@ def finetune(args, train_valid_datasets_provider, model_kwargs, forward_step=fin
             else:
                 num_task_tokens, task_tokens = 0, []
             num_task_tokens = flow.cuda.LongTensor([num_task_tokens])
-            flow.distributed.broadcast(num_task_tokens, mpu.get_model_parallel_src_rank(),
-                                        group=mpu.get_model_parallel_group())
+            # flow.distributed.broadcast(num_task_tokens, mpu.get_model_parallel_src_rank(),
+            #                             group=mpu.get_model_parallel_group())
             num_task_tokens = num_task_tokens.item()
             if num_task_tokens > 0:
                 if mpu.get_model_parallel_rank() == 0:
                     task_tokens = flow.cuda.LongTensor(task_tokens)
                 else:
                     task_tokens = flow.empty(num_task_tokens, device=flow.cuda.current_device(), dtype=flow.long)
-                flow.distributed.broadcast(task_tokens, mpu.get_model_parallel_src_rank(),
-                                            group=mpu.get_model_parallel_group())
+                # flow.distributed.broadcast(task_tokens, mpu.get_model_parallel_src_rank(),
+                #                             group=mpu.get_model_parallel_group())
                 task_tokens = task_tokens.tolist()
         with FileLock(os.path.join(pathlib.Path.home(), "checkpoint_lock"), timeout=-1):
             load_pretrained(model, args.load_pretrained, args, task_tokens=task_tokens)
@@ -449,13 +446,11 @@ if __name__ == '__main__':
     args = get_args()
     assert args.finetune
 
-    # Pytorch distributed.
-    initialize_distributed(args)
-
+    #  Pytorch distributed.
+    # initialize_distributed(args)
     # Random seeds for reproducability.
     set_random_seed(args.seed)
     from tasks.superglue.dataset import PROCESSORS
-
     superglue_tasks = list(PROCESSORS.keys())
     if args.task.lower() in superglue_tasks or args.task.lower() == "multichoice":
         from tasks.superglue.finetune import main
@@ -466,5 +461,4 @@ if __name__ == '__main__':
         from tasks.seq2seq.finetune import main
     else:
         raise NotImplementedError('Task {} is not implemented.'.format(args.task))
-
     main(args)

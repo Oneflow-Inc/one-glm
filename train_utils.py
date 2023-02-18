@@ -293,11 +293,9 @@ def setup_model_and_optimizer(args, model_type=None, multi_token=True, num_label
     if args.debug_loss:
         # load pretrain
         load_torch_model(model, path=args.debug_pretrain_model)
-        # load_torch_model(model,"/home/fengwen/datasets/mo.pt")
         model.eval()
     else:
         model.train()
-    print(f"/home/fengwen/datasets/mo.pt  is load!!")
 
     check_mode(args, model)
 

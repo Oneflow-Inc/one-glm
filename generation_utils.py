@@ -281,7 +281,31 @@ class BeamSearchScorer(BeamScorer):
                 beam_hyp.add(final_tokens, final_score, mems=[mem[[batch_beam_idx]] for mem in mems] if mems else None)
 
         # select the best hypotheses
-        sent_lengths = input_ids.new(batch_size * self.num_beam_hyps_to_keep)
+        # TODO(fengwen) issues:https://github.com/Oneflow-Inc/oneflow/issues/9875
+        def new_tensor(*args: any,dtype = None, device: flow.device = None) -> flow.Tensor:
+            """
+            创建一个与给定尺寸相同的新张量，数据类型和设备与当前张量相同。
+            """
+
+            device = device if not device else flow.device("cpu")
+            dtype = dtype if not dtype else flow.float32 
+            if len(args) == 1 and isinstance(args[0], flow.Tensor):
+                # 如果输入参数是一个张量，则对该张量进行克隆
+                new_tensor = args[0].clone().to(device)
+            elif len(args) == 1 and isinstance(args[0], int):
+                # 如果输入参数是一个整数，则创建一个具有随机值的 1 维张量
+                new_tensor = flow.randn(args[0]).type(dtype).to(device)
+            elif len(args) == 1 and isinstance(args[0],(list, tuple)):
+                # 如果输入参数(list,tuple),直接作为tensor中数据
+                new_tensor = flow.tensor(args[0]).type(dtype).to(device)
+            else:
+                new_tensor = flow.randn(args).type(dtype).to(device)
+            return new_tensor
+        
+        # sent_lengths = input_ids.new(batch_size * self.num_beam_hyps_to_keep)
+        sent_lengths = new_tensor(batch_size * self.num_beam_hyps_to_keep,
+                                    dtype=input_ids.dtype,
+                                    device=input_ids.device)
         best = []
 
         # retrieve best hypotheses
@@ -294,8 +318,16 @@ class BeamSearchScorer(BeamScorer):
 
         # prepare for adding eos
         sent_max_len = sent_lengths.max().item()
-        decoded: flow.LongTensor = input_ids.new(batch_size * self.num_beam_hyps_to_keep, sent_max_len)
-        scores = final_beam_scores.new(batch_size * self.num_beam_hyps_to_keep)
+        # decoded: flow.LongTensor = input_ids.new(batch_size * self.num_beam_hyps_to_keep, sent_max_len)
+        decoded: flow.LongTensor = new_tensor(batch_size * self.num_beam_hyps_to_keep, sent_max_len,
+                                    dtype=input_ids.dtype,
+                                    device=input_ids.device)
+        
+        # scores = final_beam_scores.new(batch_size * self.num_beam_hyps_to_keep)
+        scores = new_tensor(batch_size * self.num_beam_hyps_to_keep,
+                            dtype=final_beam_scores.dtype,
+                            device=final_beam_scores.device)
+
         # shorter batches are padded if needed
         if sent_lengths.min().item() != sent_lengths.max().item():
             assert pad_token_id is not None, "`pad_token_id` has to be defined"

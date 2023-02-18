@@ -46,7 +46,8 @@ def print_rank_0(message):
     #     if flow.env.get_rank() == 0:
     #         print(message, flush=True)
     # else:
-    print(message, flush=True)
+    if flow.distributed.get_rank() in {-1,0}:
+        print(message, flush=True)
 
 
 def get_hostname():
@@ -124,11 +125,11 @@ class Timers:
 
         def start(self):
             """Start the timer."""
-            # assert not self.started_, 'timer has already been started'
-            # flow.cuda.synchronize()
-            # self.start_time = time.time()
-            # self.started_ = True
-            pass
+            assert not self.started_, 'timer has already been started'
+            flow.cuda.synchronize()
+            self.start_time = time.time()
+            self.started_ = True
+            
 
         def stop(self):
             """Stop the timer."""
@@ -260,7 +261,8 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler, args, tag=None, b
                 sd['random_rng_state'] = random.getstate()
                 sd['np_rng_state'] = np.random.get_state()
                 sd['torch_rng_state'] = flow.get_rng_state()
-                sd['cuda_rng_state'] = flow.cuda.get_rng_state()
+                # sd['cuda_rng_state'] = flow.cuda.get_rng_state()
+                sd['cuda_rng_state'] = flow.get_rng_state()
                 sd['rng_tracker_states'] = mpu.get_cuda_rng_tracker().get_states()
 
             ensure_directory_exists(checkpoint_name)
