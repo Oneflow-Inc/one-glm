@@ -282,14 +282,13 @@ class BeamSearchScorer(BeamScorer):
 
         # select the best hypotheses
         # TODO(fengwen) issues:https://github.com/Oneflow-Inc/oneflow/issues/9875
-        def new_tensor(args: any, size: None, dtype = None, device: flow.device = None) -> flow.Tensor:
+        def new_tensor(args: any,dtype = None, device: flow.device = None) -> flow.Tensor:
             """
             创建一个与给定尺寸相同的新张量，数据类型和设备与当前张量相同。
             """
 
             device = device if not device else flow.device("cpu")
             dtype = dtype if not dtype else flow.float32 
-           
             if len(args) == 1 and isinstance(args[0], flow.Tensor):
                 # 如果输入参数是一个张量，则对该张量进行克隆
                 new_tensor = args[0].clone().to(device)
@@ -297,14 +296,14 @@ class BeamSearchScorer(BeamScorer):
                 # 如果输入参数是一个整数，则创建一个具有随机值的 1 维张量
                 new_tensor = flow.randn(args[0]).type(dtype).to(device)
             elif len(args) == 1 and isinstance(args[0],(list, tuple)):
-                # 如果输入参数是一个整数
-                new_tensor = flow.tensor(args).type(dtype).to(device)
+                # 如果输入参数(list,tuple),直接作为tensor中数据
+                new_tensor = flow.tensor(args[0]).type(dtype).to(device)
             else:
                 new_tensor = flow.randn(args).type(dtype).to(device)
             return new_tensor
         
         # sent_lengths = input_ids.new(batch_size * self.num_beam_hyps_to_keep)
-        sent_lengths = new_tensor(args=[batch_size * self.num_beam_hyps_to_keep],
+        sent_lengths = new_tensor(batch_size * self.num_beam_hyps_to_keep,
                                     dtype=input_ids.dtype,
                                     device=input_ids.device)
         best = []

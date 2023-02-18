@@ -46,7 +46,8 @@ def print_rank_0(message):
     #     if flow.env.get_rank() == 0:
     #         print(message, flush=True)
     # else:
-    print(message, flush=True)
+    if flow.distributed.get_rank() in {-1,0}:
+        print(message, flush=True)
 
 
 def get_hostname():
