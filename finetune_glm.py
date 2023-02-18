@@ -195,7 +195,6 @@ def _train(model, optimizer, lr_scheduler, forward_step,
     """Train the model."""
 
     # Turn on training mode which enables dropout.
-    model.train()
 
     # Tracking loss.
     args.iteration = 0
@@ -447,13 +446,11 @@ if __name__ == '__main__':
     args = get_args()
     assert args.finetune
 
-    # # Pytorch distributed.
+    #  Pytorch distributed.
     # initialize_distributed(args)
-
     # Random seeds for reproducability.
     set_random_seed(args.seed)
     from tasks.superglue.dataset import PROCESSORS
-
     superglue_tasks = list(PROCESSORS.keys())
     if args.task.lower() in superglue_tasks or args.task.lower() == "multichoice":
         from tasks.superglue.finetune import main
@@ -464,5 +461,4 @@ if __name__ == '__main__':
         from tasks.seq2seq.finetune import main
     else:
         raise NotImplementedError('Task {} is not implemented.'.format(args.task))
-
     main(args)

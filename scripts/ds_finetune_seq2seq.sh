@@ -3,15 +3,14 @@ CHECKPOINT_PATH="/dataset/c07bd62b/finetune_checkpoints"
 SAVE_PATH="/home/fengwen/one-glm/runs"
 DATESTR=$(date +"%m-%d-%H-%M")
 
-export CUDA_VISIBLE_DEVICES=7
 
 source $1    # Model
 source $2    # Task
 
 NUM_WORKERS=2
-NUM_GPUS_PER_WORKER=8
+NUM_GPUS_PER_WORKER=2
 HOST_FILE_PATH="./hostfile"
-MP_SIZE=10
+MP_SIZE=1
 MASTER_PORT=$(shuf -n 1 -i 10000-65535)
 # 注意：不接受--deep_speed参数 因为oneflow的launch模块支持单个或者多个节点的启动，不需要使用deepspeed来辅助
 
@@ -21,7 +20,7 @@ echo "MODEL_ARGS"$MODEL_ARGS
  
 EXPERIMENT_NAME=${EXPERIMENT_NAME}_${DATESTR}
 mkdir logs
-run_cmd="python  -m oneflow.distributed.launch --nproc_per_node  1  finetune_glm.py \
+run_cmd="python  -m oneflow.distributed.launch --nproc_per_node   ${NUM_GPUS_PER_WORKER}  finetune_glm.py \
        --finetune \
        --checkpoint-activations \
        --experiment-name ${EXPERIMENT_NAME} \
@@ -36,7 +35,6 @@ run_cmd="python  -m oneflow.distributed.launch --nproc_per_node  1  finetune_glm
        $TASK_ARGS \
        --model-parallel-size ${MP_SIZE} \
        --overwrite \
-       --epochs 1000  \
        2>&1 | tee logs/log-${EXPERIMENT_NAME}.txt"
 
 echo ${run_cmd}

@@ -487,7 +487,7 @@ class BertBaseData(BertData):
 
 class BertLargeData(BertData):
     PATH = '/dataset/c07bd62b/cognitive/zhengxiao/formatted_one_article_per_line_large'
-    PATH = '/data/home/fengwen/cnn_dailmail/cnn-dailymail/'
+    PATH = '/data/home/fengwen/cnn_dailmail/cnn-dailymail/customization'
     # PATH = '/home/fengwen/datasets/other/dataset/glm_train.txt'
     print(f"load {PATH=}")
 
