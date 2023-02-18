@@ -1,5 +1,5 @@
 DATA_ROOT="/data/home/fengwen/cnn_dailmail/cnn-dailymail"
-CHECKPOINT_PATH="/dataset/c07bd62b/finetune_checkpoints"
+CHECKPOINT_PATH="/home/fengwen/one-glm/runs"
 SAVE_PATH="/home/fengwen/one-glm/runs"
 DATESTR=$(date +"%m-%d-%H-%M")
 
@@ -8,7 +8,7 @@ source $1    # Model
 source $2    # Task
 
 NUM_WORKERS=2
-NUM_GPUS_PER_WORKER=8 # 代表使用
+NUM_GPUS_PER_WORKER=4 # 代表使用
 HOST_FILE_PATH="./hostfile"
 MP_SIZE=1
 MASTER_PORT=$(shuf -n 1 -i 10000-65535)

@@ -282,7 +282,7 @@ class BeamSearchScorer(BeamScorer):
 
         # select the best hypotheses
         # TODO(fengwen) issues:https://github.com/Oneflow-Inc/oneflow/issues/9875
-        def new_tensor(args: any,dtype = None, device: flow.device = None) -> flow.Tensor:
+        def new_tensor(*args: any,dtype = None, device: flow.device = None) -> flow.Tensor:
             """
             创建一个与给定尺寸相同的新张量，数据类型和设备与当前张量相同。
             """
